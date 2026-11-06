@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON Change Explainer</title>
+<style>
+:root {
+  --bg: #0f1115;
+  --card: #1a1c22;
+  --border: #2a2d35;
+  --text: #e6e6e6;
+  --muted: #9aa0a6;
+  --accent: #60a5fa;
+  --add: #22c55e;
+  --remove: #f87171;
+  --update: #fb923c;
+  --type: #c084fc;
+  --editor-bg: #15171c;
+  --badge-bg: rgba(255,255,255,0.06);
+  --shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+:root[data-theme="light"] {
+  --bg: #f4f6f9;
+  --card: #ffffff;
+  --border: #dfe3ea;
+  --text: #1a1d23;
+  --muted: #5b6470;
+  --accent: #2563eb;
+  --add: #16a34a;
+  --remove: #dc2626;
+  --update: #ea580c;
+  --type: #9333ea;
+  --editor-bg: #fafbfc;
+  --badge-bg: rgba(0,0,0,0.05);
+  --shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+.container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+header.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.brand h1 { margin:0; font-size: 22px; }
+.brand p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.badge-local {
+  display:inline-block; padding: 4px 10px; border-radius: 999px;
+  background: var(--badge-bg); border: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+}
+.theme-toggle {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+}
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px; box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.editors {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+@media (max-width: 820px) { .editors { grid-template-columns: 1fr; } }
+.editor-block { display: flex; flex-direction: column; gap: 8px; }
+.editor-label { font-weight: 600; font-size: 14px; }
+textarea.editor {
+  width: 100%; min-height: 280px; resize: vertical;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px; line-height: 1.45;
+  background: var(--editor-bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; outline: none;
+}
+textarea.editor:focus { border-color: var(--accent); }
+.editor-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn.danger { color: var(--remove); }
+.err { color: var(--remove); font-size: 12px; min-height: 16px; }
+.settings-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+}
+@media (max-width: 820px) { .settings-grid { grid-template-columns: 1fr; } }
+.field label { display:block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--editor-bg); color: var(--text);
+  font-family: inherit; font-size: 13px;
+}
+.field textarea { min-height: 70px; font-family: "SF Mono", Menlo, monospace; }
+.compare-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.progress-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.progress-overlay[hidden] { display: none !important; }
+.progress-box {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px 32px; text-align: center; box-shadow: var(--shadow);
+}
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.summary-cards {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+}
+@media (max-width: 820px) { .summary-cards { grid-template-columns: repeat(2, 1fr); } }
+.summary-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; text-align: center;
+}
+.summary-card .num { font-size: 24px; font-weight: 700; }
+.summary-card .lbl { font-size: 12px; color: var(--muted); }
+.toolbar {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px;
+}
+.toolbar input[type="search"] {
+  flex: 1; min-width: 200px; padding: 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--editor-bg); color: var(--text);
+}
+.filter-btn {
+  padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text); cursor: pointer; font-size: 13px;
+}
+.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.group-select { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+.change-list { display: flex; flex-direction: column; gap: 10px; }
+.change-item {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; border-left: 4px solid var(--muted);
+}
+.change-item.op-ADD { border-left-color: var(--add); }
+.change-item.op-REMOVE { border-left-color: var(--remove); }
+.change-item.op-UPDATE { border-left-color: var(--update); }
+.change-item.op-TYPE_CHANGE { border-left-color: var(--type); }
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 11px; font-weight: 700; margin-right: 8px;
+}
+.badge.ADD { background: rgba(34,197,94,0.15); color: var(--add); }
+.badge.REMOVE { background: rgba(248,113,113,0.15); color: var(--remove); }
+.badge.UPDATE { background: rgba(251,146,60,0.15); color: var(--update); }
+.badge.TYPE_CHANGE { background: rgba(192,132,252,0.15); color: var(--type); }
+.desc { margin: 6px 0; font-size: 14px; }
+.path-row { font-family: "SF Mono", Menlo, monospace; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.values { font-family: "SF Mono", Menlo, monospace; font-size: 12px; margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+.val-old { color: var(--remove); }
+.val-new { color: var(--add); }
+.item-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.item-actions .btn { padding: 4px 8px; font-size: 12px; }
+.group-header { font-weight: 600; margin: 12px 0 6px; color: var(--muted); font-size: 13px; }
+.pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.empty-state { text-align: center; padding: 40px; color: var(--muted); }
+.export-row { display: flex; gap: 8px; flex-wrap: wrap; }
+details pre {
+  background: var(--editor-bg); padding: 8px; border-radius: 6px;
+  font-size: 12px; overflow: auto; max-height: 240px;
+}
+.tree-container { font-family: "SF Mono", Menlo, monospace; font-size: 13px; }
+.tree-node { margin-left: 16px; }
+.tree-key { color: var(--accent); }
+.tree-val { color: var(--text); }
+.tree-added { color: var(--add); }
+.tree-removed { color: var(--remove); text-decoration: line-through; }
+.tree-modified { color: var(--update); }
+.no-changes { text-align: center; padding: 30px; color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header class="app-header">
+    <div class="brand">
+      <h1>JSON Change Explainer</h1>
+      <p>Compare JSON files and understand exactly what changed.</p>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span class="badge-local">100% Local Processing</span>
+      <button class="theme-toggle" id="themeToggle">Toggle Theme</button>
+    </div>
+  </header>
+
+  <section class="card">
+    <div class="editors">
+      <div class="editor-block">
+        <div class="editor-label">Before JSON</div>
+        <textarea class="editor" id="beforeEditor" placeholder="Paste original JSON here."></textarea>
+        <div class="err" id="beforeErr"></div>
+        <div class="editor-actions">
+          <label class="btn" for="beforeFile">Upload</label>
+          <input type="file" id="beforeFile" accept=".json,application/json" hidden>
+          <button class="btn" id="beforeClear">Clear</button>
+          <button class="btn" id="beforeFormat">Format JSON</button>
+        </div>
+      </div>
+      <div class="editor-block">
+        <div class="editor-label">After JSON</div>
+        <textarea class="editor" id="afterEditor" placeholder="Paste updated JSON here."></textarea>
+        <div class="err" id="afterErr"></div>
+        <div class="editor-actions">
+          <label class="btn" for="afterFile">Upload</label>
+          <input type="file" id="afterFile" accept=".json,application/json" hidden>
+          <button class="btn" id="afterClear">Clear</button>
+          <button class="btn" id="afterFormat">Format JSON</button>
+        </div>
+      </div>
+    </div>
+    <div class="editor-actions" style="margin-top:10px;">
+      <button class="btn" id="swapBtn">Swap</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="settings-grid">
+      <div class="field">
+        <label>Array Comparison Strategy</label>
+        <select id="arrayStrategy">
+          <option value="auto">Automatic</option>
+          <option value="index">Index-based</option>
+          <option value="identity">Identity-based</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Identity Key</label>
+        <input type="text" id="identityKey" value="id" placeholder="id">
+      </div>
+      <div class="field">
+        <label>Ignored Paths (one per line)</label>
+        <textarea id="ignoredPaths" placeholder="metadata.updatedAt&#10;users[*].lastSeen&#10;debug"></textarea>
+      </div>
+    </div>
+    <div class="compare-row">
+      <button class="btn primary" id="compareBtn">Compare</button>
+    </div>
+  </section>
+
+  <section id="results" hidden>
+    <section class="card">
+      <div class="summary-cards" id="summaryCards"></div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <input type="search" id="searchInput" placeholder="Search property, path, description, values...">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="add">Added</button>
+        <button class="filter-btn" data-filter="remove">Removed</button>
+        <button class="filter-btn" data-filter="update">Updated</button>
+        <button class="filter-btn" data-filter="type_change">Type Changes</button>
+        <select class="group-select" id="groupBy">
+          <option value="none">No grouping</option>
+          <option value="operation">Group by operation</option>
+          <option value="path">Group by parent path</option>
+        </select>
+      </div>
+      <div class="change-list" id="changeList"></div>
+      <div class="pagination" id="pagination"></div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+        <strong>Export</strong>
+      </div>
+      <div class="export-row">
+        <button class="btn" id="copyAllDesc">Copy All Descriptions</button>
+        <button class="btn" id="downloadMd">Download Markdown</button>
+        <button class="btn" id="downloadCsv">Download CSV</button>
+        <button class="btn" id="downloadJson">Download JSON Changes</button>
+        <button class="btn" id="toggleTree">Show Visual Diff</button>
+      </div>
+      <div id="treeWrap" hidden style="margin-top:12px;">
+        <div class="tree-container" id="treeContainer"></div>
+      </div>
+    </section>
+  </section>
+
+  <div class="progress-overlay" id="progressOverlay" hidden>
+    <div class="progress-box">
+      <div class="spinner"></div>
+      <div>Comparing JSON documents...</div>
+    </div>
+  </div>
+</div>
+
+<script type="text/plain" id="worker-code">
+function typeOf(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'array';
+  return typeof v; // object, string, number, boolean
+}
+function hasOwn(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+function isObject(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+
+function renderPath(segs) {
+  if (!segs || segs.length === 0) return 'root';
+  let s = '';
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i];
+    if (seg.t === 'i') {
+      s += '[' + seg.v + ']';
+    } else {
+      const k = seg.v;
+      const simple = /^[A-Za-z_$][\w$]*$/.test(k);
+      if (simple) {
+        if (i === 0) s += k;
+        else s += '.' + k;
+      } else {
+        s += '[' + JSON.stringify(k) + ']';
+      }
+    }
+  }
+  return s;
+}
+
+function parsePathString(str) {
+  const segs = [];
+  if (!str) return segs;
+  const s = str.trim();
+  if (s === 'root' || s === '') return segs;
+  let pos = 0;
+  while (pos < s.length) {
+    if (s[pos] === '.') { pos++; continue; }
+    if (s[pos] === '[') {
+      const close = s.indexOf(']', pos);
+      if (close === -1) { segs.push({t:'k', v: s.slice(pos)}); pos = s.length; break; }
+      const inside = s.slice(pos+1, close);
+      if (inside === '*') segs.push({t:'i', v: '*'});
+      else if (/^\d+$/.test(inside)) segs.push({t:'i', v: Number(inside)});
+      else {
+        let key = inside;
+        if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+          try { key = JSON.parse(key.replace(/^'/, '"').replace(/'$/, '"')); }
+          catch (e) { key = key.slice(1, -1); }
+        }
+        segs.push({t:'k', v: key});
+      }
+      pos = close + 1;
+    } else {
+      let end = pos;
+      while (end < s.length && s[end] !== '.' && s[end] !== '[') end++;
+      const key = s.slice(pos, end);
+      if (key) segs.push({t:'k', v: key});
+      pos = end;
+    }
+  }
+  return segs;
+}
+
+function isIgnoredSegs(segs, patterns) {
+  for (const pat of patterns) {
+    if (pat.length === 0) continue;
+    if (pat.length > segs.length) continue;
+    let ok = true;
+    for (let i = 0; i < pat.length; i++) {
+      const p = pat[i], s = segs[i];
+      if (p.v === '*') continue;
+      if (p.t !== s.t || p.v !== s.v) { ok = false; break; }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+function fmtValue(v) {
+  if (v === null) return 'null';
+  if (v === undefined) return '';
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (typeof v === 'boolean') return String(v);
+  if (typeof v === 'number') return String(v);
+  try { return JSON.stringify(v); } catch (e) { return '[unserializable]'; }
+}
+
+function makeEvent(op, segs, property, index, oldValue, newValue, oldType, newType, isArrayItem, arrayName, identityKey, identityValue) {
+  const ev = {
+    operation: op,
+    path: renderPath(segs),
+    property: (property === undefined ? null : property),
+    index: (index === undefined ? null : index),
+    oldValue: oldValue,
+    newValue: newValue,
+    oldType: (oldType === undefined ? null : oldType),
+    newType: (newType === undefined ? null : newType),
+    isArrayItem: !!isArrayItem,
+    arrayName: arrayName || null,
+    identityKey: identityKey || null,
+    identityValue: (identityValue === undefined ? null : identityValue),
+  };
+  ev.description = describe(ev);
+  return ev;
+}
+
+function describe(ev) {
+  const path = ev.path;
+  const q = (s) => "'" + String(s).replace(/'/g, "\\'") + "'";
+  if (ev.property != null) {
+    const p = ev.property;
+    if (ev.operation === 'ADD') return 'Added property ' + q(p) + ' with value ' + fmtValue(ev.newValue) + ' at path ' + path + '.';
+    if (ev.operation === 'REMOVE') return 'Removed property ' + q(p) + ' from path ' + path + '.';
+    if (ev.operation === 'UPDATE') return 'Updated property ' + q(p) + ' from ' + fmtValue(ev.oldValue) + ' to ' + fmtValue(ev.newValue) + ' at path ' + path + '.';
+    var _oldPart = (ev.oldType === 'null') ? 'null' : (ev.oldType + ' ' + fmtValue(ev.oldValue));
+    var _newPart = (ev.newType === 'null') ? 'null' : (ev.newType + ' ' + fmtValue(ev.newValue));
+    if (ev.operation === 'TYPE_CHANGE') return 'Changed property ' + q(p) + ' from ' + _oldPart + ' to ' + _newPart + ' at path ' + path + '.';
+  }
+  if (ev.isArrayItem) {
+    const idx = ev.index;
+    const arr = ev.arrayName || 'array';
+    const singular = (arr.endsWith('s') && arr.length > 1) ? arr.slice(0, -1) : 'item';
+    if (ev.operation === 'ADD') {
+      if (ev.identityValue != null) {
+        return 'Added ' + singular + ' with ' + ev.identityKey + ' ' + fmtValue(ev.identityValue) + ' at index ' + idx + '.';
+      }
+      if (ev.newType === 'object' || ev.newType === 'array') {
+        return 'Added a new object at path ' + path + '.';
+      }
+      return 'Added a new item at index ' + idx + ' in array ' + arr + '.';
+    }
+    if (ev.operation === 'REMOVE') {
+      if (ev.identityValue != null) {
+        return 'Removed ' + singular + ' with ' + ev.identityKey + ' ' + fmtValue(ev.identityValue) + ' at index ' + idx + '.';
+      }
+      if (ev.oldType === 'object' || ev.oldType === 'array') {
+        return 'Removed the object at path ' + path + '.';
+      }
+      return 'Removed value ' + fmtValue(ev.oldValue) + ' at index ' + idx + ' from array ' + arr + '.';
+    }
+    if (ev.operation === 'UPDATE') {
+      return 'Updated item at index ' + idx + ' in array ' + arr + ' from ' + fmtValue(ev.oldValue) + ' to ' + fmtValue(ev.newValue) + '.';
+    }
+    if (ev.operation === 'TYPE_CHANGE') {
+      var _o = (ev.oldType === 'null') ? 'null' : (ev.oldType + ' ' + fmtValue(ev.oldValue));
+      var _n = (ev.newType === 'null') ? 'null' : (ev.newType + ' ' + fmtValue(ev.newValue));
+      return 'Changed item at index ' + idx + ' in array ' + arr + ' from ' + _o + ' to ' + _n + '.';
+    }
+  }
+  if (ev.operation === 'ADD') return 'Added value ' + fmtValue(ev.newValue) + ' at path ' + path + '.';
+  if (ev.operation === 'REMOVE') return 'Removed value from path ' + path + '.';
+  if (ev.operation === 'UPDATE') return 'Updated value from ' + fmtValue(ev.oldValue) + ' to ' + fmtValue(ev.newValue) + ' at path ' + path + '.';
+  var _o = (ev.oldType === 'null') ? 'null' : (ev.oldType + ' ' + fmtValue(ev.oldValue));
+  var _n = (ev.newType === 'null') ? 'null' : (ev.newType + ' ' + fmtValue(ev.newValue));
+  if (ev.operation === 'TYPE_CHANGE') return 'Changed value from ' + _o + ' to ' + _n + ' at path ' + path + '.';
+  return '';
+}
+
+function compareAll(before, after, opts) {
+  const events = [];
+  const ignoredPatterns = (opts.ignoredPaths || []).map(parsePathString);
+  const opt = {
+    ignored: ignoredPatterns,
+    arrayStrategy: opts.arrayStrategy || 'auto',
+    identityKey: opts.identityKey || 'id',
+  };
+
+  const tb = typeOf(before), ta = typeOf(after);
+  const stack = [];
+  if (tb !== ta) {
+    events.push(makeEvent('TYPE_CHANGE', [], null, null, before, after, tb, ta, false, null, null, null));
+  } else if (tb === 'object') {
+    stack.push({kind:'object', b: before, a: after, segs: []});
+  } else if (tb === 'array') {
+    stack.push({kind:'array', b: before, a: after, segs: []});
+  } else {
+    if (before !== after) events.push(makeEvent('UPDATE', [], null, null, before, after, tb, ta, false, null, null, null));
+  }
+
+  while (stack.length) {
+    const task = stack.pop();
+    if (task.kind === 'object') {
+      const b = task.b || {};
+      const a = task.a || {};
+      const keys = new Set([...Object.keys(b), ...Object.keys(a)]);
+      for (const key of keys) {
+        const childSegs = task.segs.concat([{t:'k', v: key}]);
+        if (isIgnoredSegs(childSegs, opt.ignored)) continue;
+        const hasB = hasOwn(b, key);
+        const hasA = hasOwn(a, key);
+        if (hasB && !hasA) {
+          events.push(makeEvent('REMOVE', task.segs, key, null, b[key], undefined, typeOf(b[key]), undefined, false, null, null, null));
+        } else if (!hasB && hasA) {
+          events.push(makeEvent('ADD', task.segs, key, null, undefined, a[key], undefined, typeOf(a[key]), false, null, null, null));
+        } else {
+          const bv = b[key], av = a[key];
+          const tbv = typeOf(bv), tav = typeOf(av);
+          if (tbv !== tav) {
+            events.push(makeEvent('TYPE_CHANGE', task.segs, key, null, bv, av, tbv, tav, false, null, null, null));
+          } else if (tbv === 'object') {
+            stack.push({kind:'object', b: bv, a: av, segs: childSegs});
+          } else if (tbv === 'array') {
+            stack.push({kind:'array', b: bv, a: av, segs: childSegs});
+          } else {
+            if (bv !== av) events.push(makeEvent('UPDATE', task.segs, key, null, bv, av, tbv, tav, false, null, null, null));
+          }
+        }
+      }
+    } else if (task.kind === 'array') {
+      const beforeArr = Array.isArray(task.b) ? task.b : [];
+      const afterArr = Array.isArray(task.a) ? task.a : [];
+      const segs = task.segs;
+      const arrayName = (segs.length && segs[segs.length-1].t === 'k') ? segs[segs.length-1].v : (segs.length === 0 ? 'root' : 'array');
+      const identityKey = opt.identityKey;
+      let useIdentity = false;
+      if (opt.arrayStrategy === 'identity') useIdentity = true;
+      else if (opt.arrayStrategy === 'auto') {
+        const hasId = (arr) => arr.some(el => isObject(el) && hasOwn(el, identityKey));
+        useIdentity = hasId(beforeArr) || hasId(afterArr);
+      }
+      if (!beforeArr.some(isObject) && !afterArr.some(isObject)) useIdentity = false;
+
+      if (!useIdentity) {
+        const maxLen = Math.max(beforeArr.length, afterArr.length);
+        for (let i = 0; i < maxLen; i++) {
+          const itemSegs = segs.concat([{t:'i', v: i}]);
+          if (isIgnoredSegs(itemSegs, opt.ignored)) continue;
+          const hasB = i < beforeArr.length;
+          const hasA = i < afterArr.length;
+          if (hasB && !hasA) {
+            events.push(makeEvent('REMOVE', itemSegs, null, i, beforeArr[i], undefined, typeOf(beforeArr[i]), undefined, true, arrayName, null, null));
+          } else if (!hasB && hasA) {
+            events.push(makeEvent('ADD', itemSegs, null, i, undefined, afterArr[i], undefined, typeOf(afterArr[i]), true, arrayName, null, null));
+          } else {
+            const bv = beforeArr[i], av = afterArr[i];
+            const tbv = typeOf(bv), tav = typeOf(av);
+            if (tbv !== tav) {
+              events.push(makeEvent('TYPE_CHANGE', itemSegs, null, i, bv, av, tbv, tav, true, arrayName, null, null));
+            } else if (tbv === 'object') {
+              stack.push({kind:'object', b: bv, a: av, segs: itemSegs});
+            } else if (tbv === 'array') {
+              stack.push({kind:'array', b: bv, a: av, segs: itemSegs});
+            } else {
+              if (bv !== av) events.push(makeEvent('UPDATE', itemSegs, null, i, bv, av, tbv, tav, true, arrayName, null, null));
+            }
+          }
+        }
+      } else {
+        const matchedBefore = new Set();
+        const pairs = [];
+        const addedAfter = [];
+        // index before elements by identity value for O(n) matching
+        const idToBefore = new Map();
+        for (let i = 0; i < beforeArr.length; i++) {
+          const bv = beforeArr[i];
+          if (isObject(bv) && hasOwn(bv, identityKey)) {
+            const key = JSON.stringify(bv[identityKey]);
+            if (!idToBefore.has(key)) idToBefore.set(key, []);
+            idToBefore.get(key).push(i);
+          }
+        }
+        for (let j = 0; j < afterArr.length; j++) {
+          const av = afterArr[j];
+          let found = -1;
+          if (isObject(av) && hasOwn(av, identityKey)) {
+            const key = JSON.stringify(av[identityKey]);
+            const candidates = idToBefore.get(key);
+            if (candidates) {
+              for (const i of candidates) {
+                if (matchedBefore.has(i)) continue;
+                found = i;
+                break;
+              }
+            }
+          }
+          if (found !== -1) {
+            matchedBefore.add(found);
+            pairs.push({bIdx: found, aIdx: j});
+          } else {
+            addedAfter.push(j);
+          }
+        }
+        const removedBefore = [];
+        for (let i = 0; i < beforeArr.length; i++) if (!matchedBefore.has(i)) removedBefore.push(i);
+
+        for (const i of removedBefore) {
+          const bv = beforeArr[i];
+          const idv = (isObject(bv) && hasOwn(bv, identityKey)) ? bv[identityKey] : null;
+          const itemSegs = segs.concat([{t:'i', v: i}]);
+          if (isIgnoredSegs(itemSegs, opt.ignored)) continue;
+          events.push(makeEvent('REMOVE', itemSegs, null, i, bv, undefined, typeOf(bv), undefined, true, arrayName, identityKey, idv));
+        }
+        for (const j of addedAfter) {
+          const av = afterArr[j];
+          const idv = (isObject(av) && hasOwn(av, identityKey)) ? av[identityKey] : null;
+          const itemSegs = segs.concat([{t:'i', v: j}]);
+          if (isIgnoredSegs(itemSegs, opt.ignored)) continue;
+          events.push(makeEvent('ADD', itemSegs, null, j, undefined, av, undefined, typeOf(av), true, arrayName, identityKey, idv));
+        }
+        for (const pair of pairs) {
+          const bv = beforeArr[pair.bIdx];
+          const av = afterArr[pair.aIdx];
+          const itemSegs = segs.concat([{t:'i', v: pair.aIdx}]);
+          if (isIgnoredSegs(itemSegs, opt.ignored)) continue;
+          const tbv = typeOf(bv), tav = typeOf(av);
+          const idv = (isObject(av) && hasOwn(av, identityKey)) ? av[identityKey] : null;
+          if (tbv !== tav) {
+            events.push(makeEvent('TYPE_CHANGE', itemSegs, null, pair.aIdx, bv, av, tbv, tav, true, arrayName, identityKey, idv));
+          } else if (tbv === 'object') {
+            stack.push({kind:'object', b: bv, a: av, segs: itemSegs});
+          } else if (tbv === 'array') {
+            stack.push({kind:'array', b: bv, a: av, segs: itemSegs});
+          } else {
+            if (bv !== av) events.push(makeEvent('UPDATE', itemSegs, null, pair.aIdx, bv, av, tbv, tav, true, arrayName, identityKey, idv));
+          }
+        }
+      }
+    }
+  }
+
+  return events;
+}
+
+self.onmessage = function (e) {
+  const data = e.data || {};
+  try {
+    const events = compareAll(data.before, data.after, data.options || {});
+    self.postMessage({ok: true, events: events});
+  } catch (err) {
+    self.postMessage({ok: false, error: (err && err.message) ? err.message : String(err)});
+  }
+};
+</script>
+
+<script>
+(function () {
+  const beforeEditor = document.getElementById('beforeEditor');
+  const afterEditor = document.getElementById('afterEditor');
+  const beforeErr = document.getElementById('beforeErr');
+  const afterErr = document.getElementById('afterErr');
+  const resultsSection = document.getElementById('results');
+  const progressOverlay = document.getElementById('progressOverlay');
+
+  // theme
+  const root = document.documentElement;
+  function initTheme() {
+    let t = localStorage.getItem('theme');
+    if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', t);
+  }
+  initTheme();
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  });
+
+  // worker
+  const workerCode = document.getElementById('worker-code').textContent;
+  // Make comparison functions available on the main thread as a fallback
+  // (Web Workers from blob: URLs can be blocked when opening file:// directly).
+  try { eval(workerCode); } catch (e) { console.error('eval worker code failed', e); }
+
+  let events = [];
+  let currentFilter = 'all';
+  let searchQuery = '';
+  let groupBy = 'none';
+  let page = 0;
+  const pageSize = 100;
+
+  // helpers
+  function lineColFromPos(text, pos) {
+    let line = 1, col = 1;
+    for (let i = 0; i < pos && i < text.length; i++) {
+      if (text[i] === '\n') { line++; col = 1; } else { col++; }
+    }
+    return {line, col};
+  }
+  function tryParse(text, errEl) {
+    errEl.textContent = '';
+    if (!text.trim()) { errEl.textContent = 'Input is empty.'; return null; }
+    try { return JSON.parse(text); }
+    catch (e) {
+      const m = String(e.message).match(/position (\d+)/);
+      let info = '';
+      if (m) {
+        const {line, col} = lineColFromPos(text, +m[1]);
+        info = ' at line ' + line + ', column ' + col;
+      }
+      errEl.textContent = 'Invalid JSON' + info + ': ' + e.message;
+      return null;
+    }
+  }
+  function fmt(v) {
+    if (v === null) return 'null';
+    if (v === undefined) return '';
+    if (typeof v === 'string') return JSON.stringify(v);
+    if (typeof v === 'boolean') return String(v);
+    if (typeof v === 'number') return String(v);
+    try { return JSON.stringify(v); } catch (e) { return '[unserializable]'; }
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function stringify(v) {
+    if (v === undefined) return '';
+    try { return typeof v === 'string' ? v : JSON.stringify(v); } catch (e) { return ''; }
+  }
+
+  // file upload
+  function bindFile(inputId, editor) {
+    document.getElementById(inputId).addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => { editor.value = r.result; };
+      r.readAsText(f);
+      e.target.value = '';
+    });
+  }
+  bindFile('beforeFile', beforeEditor);
+  bindFile('afterFile', afterEditor);
+
+  document.getElementById('beforeClear').addEventListener('click', () => { beforeEditor.value = ''; beforeErr.textContent = ''; });
+  document.getElementById('afterClear').addEventListener('click', () => { afterEditor.value = ''; afterErr.textContent = ''; });
+  document.getElementById('beforeFormat').addEventListener('click', () => {
+    beforeErr.textContent = '';
+    try { const v = JSON.parse(beforeEditor.value); beforeEditor.value = JSON.stringify(v, null, 2); }
+    catch (e) { beforeErr.textContent = 'Invalid JSON: ' + e.message; }
+  });
+  document.getElementById('afterFormat').addEventListener('click', () => {
+    afterErr.textContent = '';
+    try { const v = JSON.parse(afterEditor.value); afterEditor.value = JSON.stringify(v, null, 2); }
+    catch (e) { afterErr.textContent = 'Invalid JSON: ' + e.message; }
+  });
+  document.getElementById('swapBtn').addEventListener('click', () => {
+    const t = beforeEditor.value; beforeEditor.value = afterEditor.value; afterEditor.value = t;
+  });
+
+  // Better compare handler
+  function parseEditor(text, errEl) {
+    errEl.textContent = '';
+    if (!text.trim()) { errEl.textContent = 'Input is empty.'; return {ok: false}; }
+    try { return {ok: true, value: JSON.parse(text)}; }
+    catch (e) {
+      const m = String(e.message).match(/position (\d+)/);
+      let info = '';
+      if (m) {
+        const {line, col} = lineColFromPos(text, +m[1]);
+        info = ' at line ' + line + ', column ' + col;
+      }
+      errEl.textContent = 'Invalid JSON' + info + ': ' + e.message;
+      return {ok: false};
+    }
+  }
+
+  document.getElementById('compareBtn').addEventListener('click', () => {
+    beforeErr.textContent = '';
+    afterErr.textContent = '';
+    const br = parseEditor(beforeEditor.value, beforeErr);
+    const ar = parseEditor(afterEditor.value, afterErr);
+    if (!br.ok || !ar.ok) return;
+    progressOverlay.hidden = false;
+    const arrayStrategy = document.getElementById('arrayStrategy').value;
+    const identityKey = document.getElementById('identityKey').value.trim() || 'id';
+    const ignoredPaths = document.getElementById('ignoredPaths').value.split('\n').map(s => s.trim()).filter(Boolean);
+    setTimeout(() => {
+      try {
+        const ev = compareAll(br.value, ar.value, {arrayStrategy, identityKey, ignoredPaths});
+        events = ev || [];
+        page = 0;
+        progressOverlay.hidden = true;
+        renderResults();
+      } catch (err) {
+        progressOverlay.hidden = true;
+        beforeErr.textContent = (err && err.message) ? err.message : String(err);
+      }
+    }, 20);
+  });
+
+  // filters
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.getAttribute('data-filter');
+      page = 0;
+      renderChangeList();
+    });
+  });
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchQuery = e.target.value || '';
+    page = 0;
+    renderChangeList();
+  });
+  document.getElementById('groupBy').addEventListener('change', (e) => {
+    groupBy = e.target.value;
+    page = 0;
+    renderChangeList();
+  });
+
+  function filterOp(ev) {
+    if (currentFilter === 'all') return true;
+    const map = {add: 'ADD', remove: 'REMOVE', update: 'UPDATE', type_change: 'TYPE_CHANGE'};
+    return ev.operation === map[currentFilter];
+  }
+  function getFiltered() {
+    let list = events.filter(filterOp);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(ev => {
+        return (ev.property || '').toLowerCase().includes(q) ||
+          (ev.path || '').toLowerCase().includes(q) ||
+          (ev.description || '').toLowerCase().includes(q) ||
+          stringify(ev.oldValue).toLowerCase().includes(q) ||
+          stringify(ev.newValue).toLowerCase().includes(q);
+      });
+    }
+    return list;
+  }
+
+  function renderResults() {
+    resultsSection.hidden = false;
+    // summary
+    const counts = {ADD:0, REMOVE:0, UPDATE:0, TYPE_CHANGE:0};
+    events.forEach(e => { if (counts[e.operation] !== undefined) counts[e.operation]++; });
+    const cards = document.getElementById('summaryCards');
+    cards.innerHTML = '';
+    const items = [
+      {label: 'Total Changes', num: events.length, cls: ''},
+      {label: 'Added', num: counts.ADD, cls: 'op-ADD'},
+      {label: 'Removed', num: counts.REMOVE, cls: 'op-REMOVE'},
+      {label: 'Updated', num: counts.UPDATE, cls: 'op-UPDATE'},
+      {label: 'Type Changes', num: counts.TYPE_CHANGE, cls: 'op-TYPE_CHANGE'},
+    ];
+    items.forEach(it => {
+      const d = document.createElement('div');
+      d.className = 'summary-card';
+      d.innerHTML = '<div class="num">' + it.num + '</div><div class="lbl">' + esc(it.label) + '</div>';
+      cards.appendChild(d);
+    });
+
+    if (events.length === 0) {
+      document.getElementById('changeList').innerHTML = '<div class="no-changes">No changes detected. Both JSON documents are identical.</div>';
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+    renderChangeList();
+  }
+
+  function renderGroupCard(pathKey, items) {
+    const div = document.createElement('div');
+    div.className = 'change-item';
+    let html = '';
+    html += '<div style="font-weight:600; margin-bottom:6px;">' + esc(pathKey) + '</div>';
+    items.forEach(ev => {
+      html += '<div style="margin:4px 0;">' + esc(ev.description) + '</div>';
+    });
+    const allDesc = items.map(e => e.description).join('\\n');
+    html += '<div class="item-actions"><button class="btn" data-copy-group="' + esc(allDesc) + '">Copy all in group</button></div>';
+    div.innerHTML = html;
+    div.querySelectorAll('[data-copy-group]').forEach(b => b.addEventListener('click', () => copyText(b.getAttribute('data-copy-group'))));
+    return div;
+  }
+
+  function renderChangeList() {
+    const list = getFiltered();
+    const container = document.getElementById('changeList');
+    const pag = document.getElementById('pagination');
+    container.innerHTML = '';
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty-state">No changes match the current filters.</div>';
+      pag.innerHTML = '';
+      return;
+    }
+
+    // grouping
+    let groups = null;
+    if (groupBy === 'operation') {
+      groups = {};
+      list.forEach(ev => { (groups[ev.operation] = groups[ev.operation] || []).push(ev); });
+    } else if (groupBy === 'path') {
+      groups = {};
+      list.forEach(ev => { const k = ev.path || '(root)'; (groups[k] = groups[k] || []).push(ev); });
+    }
+
+    const start = page * pageSize;
+    const pageItems = list.slice(start, start + pageSize);
+
+    function renderItem(ev) {
+      const div = document.createElement('div');
+      div.className = 'change-item op-' + ev.operation;
+      const badgeClass = ev.operation;
+      let html = '';
+      html += '<p class="desc">' + esc(ev.description) + '</p>';
+      html += '<div class="item-actions">';
+      html += '<button class="btn" data-copy-path="' + esc(ev.path || 'root') + '">Copy path</button>';
+      html += '<button class="btn" data-copy-desc="' + esc(ev.description) + '">Copy description</button>';
+      html += '</div>';
+      div.innerHTML = html;
+      // copy handlers
+      div.querySelectorAll('[data-copy-path]').forEach(b => b.addEventListener('click', () => copyText(b.getAttribute('data-copy-path'))));
+      div.querySelectorAll('[data-copy-desc]').forEach(b => b.addEventListener('click', () => copyText(b.getAttribute('data-copy-desc'))));
+      return div;
+    }
+
+    if (groups) {
+      const groupKeys = [];
+      const seen = new Set();
+      list.forEach(ev => {
+        const k = groupBy === 'operation' ? ev.operation : (ev.path || '(root)');
+        if (!seen.has(k)) { seen.add(k); groupKeys.push(k); }
+      });
+      groupKeys.forEach(k => {
+        const gItems = groups[k];
+        if (groupBy === 'path') {
+          container.appendChild(renderGroupCard(k, gItems));
+        } else {
+          const h = document.createElement('div');
+          h.className = 'group-header';
+          h.textContent = k;
+          container.appendChild(h);
+          gItems.forEach(ev => container.appendChild(renderItem(ev)));
+        }
+      });
+    } else {
+      pageItems.forEach(ev => container.appendChild(renderItem(ev)));
+    }
+
+    // pagination controls
+    pag.innerHTML = '';
+    const totalPages = Math.ceil(list.length / pageSize);
+    if (totalPages > 1) {
+      const prev = document.createElement('button');
+      prev.className = 'btn'; prev.textContent = 'Prev';
+      prev.disabled = page === 0;
+      prev.addEventListener('click', () => { page = Math.max(0, page-1); renderChangeList(); });
+      const next = document.createElement('button');
+      next.className = 'btn'; next.textContent = 'Next';
+      next.disabled = page >= totalPages - 1;
+      next.addEventListener('click', () => { page = Math.min(totalPages-1, page+1); renderChangeList(); });
+      const info = document.createElement('span');
+      info.textContent = 'Page ' + (page+1) + ' of ' + totalPages + ' (' + list.length + ' changes)';
+      pag.appendChild(prev); pag.appendChild(info); pag.appendChild(next);
+    } else {
+      const info = document.createElement('span');
+      info.textContent = list.length + ' change' + (list.length === 1 ? '' : 's');
+      pag.appendChild(info);
+    }
+  }
+
+  function copyText(t) {
+    if (navigator.clipboard) navigator.clipboard.writeText(t).catch(() => fallbackCopy(t));
+    else fallbackCopy(t);
+  }
+  function fallbackCopy(t) {
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  // export
+  document.getElementById('copyAllDesc').addEventListener('click', () => {
+    copyText(events.map(e => e.description).join('\n'));
+  });
+  function download(filename, content, type) {
+    const blob = new Blob([content], {type: type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById('downloadMd').addEventListener('click', () => {
+    let md = '# JSON Change Report\n\nTotal changes: ' + events.length + '\n\n';
+    const labels = {ADD: 'Added', REMOVE: 'Removed', UPDATE: 'Updated', TYPE_CHANGE: 'Type Changes'};
+    ['ADD','REMOVE','UPDATE','TYPE_CHANGE'].forEach(op => {
+      const items = events.filter(e => e.operation === op);
+      if (!items.length) return;
+      md += '## ' + labels[op] + '\n';
+      items.forEach((e, i) => { md += (i+1) + '. ' + e.description + '\n'; });
+      md += '\n';
+    });
+    download('json-change-report.md', md, 'text/markdown');
+  });
+  document.getElementById('downloadCsv').addEventListener('click', () => {
+    const header = ['Operation','Path','Property','Old Value','New Value','Old Type','New Type','Description'];
+    function csvField(v) {
+      const s = v === undefined || v === null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    const rows = [header.join(',')];
+    events.forEach(e => {
+      rows.push([
+        csvField(e.operation), csvField(e.path), csvField(e.property),
+        csvField(e.oldValue), csvField(e.newValue), csvField(e.oldType),
+        csvField(e.newType), csvField(e.description)
+      ].join(','));
+    });
+    download('json-change-report.csv', rows.join('\n'), 'text/csv');
+  });
+  document.getElementById('downloadJson').addEventListener('click', () => {
+    download('json-change-events.json', JSON.stringify(events, null, 2), 'application/json');
+  });
+
+  // visual tree
+  document.getElementById('toggleTree').addEventListener('click', () => {
+    const wrap = document.getElementById('treeWrap');
+    if (wrap.hidden) {
+      wrap.hidden = false;
+      renderTree();
+      document.getElementById('toggleTree').textContent = 'Hide Visual Diff';
+    } else {
+      wrap.hidden = true;
+      document.getElementById('toggleTree').textContent = 'Show Visual Diff';
+    }
+  });
+
+  function statusOf(before, after) {
+    // returns 'added'/'removed'/'modified'/'same'/'typechanged'
+    const tb = (before === null ? 'null' : Array.isArray(before) ? 'array' : typeof before);
+    const ta = (after === null ? 'null' : Array.isArray(after) ? 'array' : typeof after);
+    if (before === undefined) return 'added';
+    if (after === undefined) return 'removed';
+    if (tb !== ta) return 'typechanged';
+    if (tb === 'object' || tb === 'array') return 'container';
+    if (before !== after) return 'modified';
+    return 'same';
+  }
+
+  function renderTree() {
+    const container = document.getElementById('treeContainer');
+    container.innerHTML = '';
+    const beforeText = beforeEditor.value;
+    const afterText = afterEditor.value;
+    let before, after;
+    try { before = beforeText.trim() ? JSON.parse(beforeText) : undefined; } catch (e) { before = undefined; }
+    try { after = afterText.trim() ? JSON.parse(afterText) : undefined; } catch (e) { after = undefined; }
+    const mergedKeys = (b, a) => {
+      const s = new Set();
+      if (b && typeof b === 'object' && !Array.isArray(b)) Object.keys(b).forEach(k => s.add(k));
+      if (a && typeof a === 'object' && !Array.isArray(a)) Object.keys(a).forEach(k => s.add(k));
+      return [...s];
+    };
+    function build(b, a, depth) {
+      if (depth > 60) return '<div>...depth limit...</div>';
+      const st = statusOf(b, a);
+      if (st === 'added') {
+        return '<div class="tree-added">+ ' + esc(fmt(a)) + '</div>';
+      }
+      if (st === 'removed') {
+        return '<div class="tree-removed">- ' + esc(fmt(b)) + '</div>';
+      }
+      if (st === 'typechanged') {
+        return '<div class="tree-modified">~ ' + esc(fmt(b)) + ' → ' + esc(fmt(a)) + '</div>';
+      }
+      if (Array.isArray(b) || Array.isArray(a)) {
+        const ba = Array.isArray(b) ? b : [];
+        const aa = Array.isArray(a) ? a : [];
+        const max = Math.max(ba.length, aa.length);
+        let html = '[\n';
+        for (let i = 0; i < max; i++) {
+          const hasB = i < ba.length;
+          const hasA = i < aa.length;
+          let child;
+          if (hasB && !hasA) child = '<span class="tree-removed">- ' + esc(fmt(ba[i])) + '</span>';
+          else if (!hasB && hasA) child = '<span class="tree-added">+ ' + esc(fmt(aa[i])) + '</span>';
+          else child = build(ba[i], aa[i], depth+1);
+          html += '<div class="tree-node">[' + i + ']: ' + child + '</div>';
+        }
+        html += ']';
+        return html;
+      }
+      if (b && typeof b === 'object') {
+        const keys = mergedKeys(b, a);
+        if (keys.length === 0) return '{}';
+        let html = '{\n';
+        keys.forEach(k => {
+          const vb = (b && hasOwnObj(b,k)) ? b[k] : undefined;
+          const va = (a && hasOwnObj(a,k)) ? a[k] : undefined;
+          const c = build(vb, va, depth+1);
+          const keyCls = (vb === undefined) ? 'tree-added' : (va === undefined) ? 'tree-removed' : '';
+          html += '<div class="tree-node"><span class="tree-key">' + esc(JSON.stringify(k)) + '</span>: ' + c + '</div>';
+        });
+        html += '}';
+        return html;
+      }
+      // primitive same or modified handled above; same:
+      if (b !== a) return '<span class="tree-modified">' + esc(fmt(a)) + '</span>';
+      return '<span class="tree-val">' + esc(fmt(a)) + '</span>';
+    }
+    function hasOwnObj(o,k){ return Object.prototype.hasOwnProperty.call(o,k); }
+    container.innerHTML = build(before, after, 0);
+  }
+})();
+</script>
+</body>
+</html>

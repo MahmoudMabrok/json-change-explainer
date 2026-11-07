@@ -1,0 +1,7 @@
+# Local-only project scaffolding and vendored projects — not part of this app
+vendor/
+.commandcode/
+_hf-scaffold/
+
+# OS cruft
+.DS_Store

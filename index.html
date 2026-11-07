@@ -148,6 +148,7 @@ textarea.editor:focus { border-color: var(--accent); }
 .change-item.op-REMOVE { border-left-color: var(--remove); }
 .change-item.op-UPDATE { border-left-color: var(--update); }
 .change-item.op-TYPE_CHANGE { border-left-color: var(--type); }
+.change-item.selected { outline: 2px solid var(--accent); }
 .badge {
   display: inline-block; padding: 2px 8px; border-radius: 6px;
   font-size: 11px; font-weight: 700; margin-right: 8px;
@@ -198,24 +199,29 @@ details pre {
     <div class="editors">
       <div class="editor-block">
         <div class="editor-label">Before JSON</div>
-        <textarea class="editor" id="beforeEditor" placeholder="Paste original JSON here."></textarea>
+        <textarea class="editor" id="beforeEditor" placeholder="Paste original JSON here.">{"user":{"profile":{"name":"ahmed","age":30,"address":{"city":"Dubai","zip":12345,"geo":{"lat":25.2,"lng":55.3}}},"tags":["a","b"],"items":[{"id":1,"name":"item1","meta":{"x":1}},{"id":2,"name":"item2"}]},"status":"active","count":5}</textarea>
         <div class="err" id="beforeErr"></div>
         <div class="editor-actions">
           <label class="btn" for="beforeFile">Upload</label>
           <input type="file" id="beforeFile" accept=".json,application/json" hidden>
           <button class="btn" id="beforeClear">Clear</button>
           <button class="btn" id="beforeFormat">Format JSON</button>
+          <input type="text" id="pathOutput" readonly placeholder="Path..." style="flex:1; min-width:120px; padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:var(--editor-bg); color:var(--accent); font-family:'SF Mono',Menlo,monospace; font-size:12px;">
+          <button class="btn" id="getPathBtn">Get Path</button>
+          <button class="btn" id="copyPathBtn">Copy Path</button>
+          <button class="btn" id="beforeCompact">Compact JSON</button>
         </div>
       </div>
       <div class="editor-block">
         <div class="editor-label">After JSON</div>
-        <textarea class="editor" id="afterEditor" placeholder="Paste updated JSON here."></textarea>
+        <textarea class="editor" id="afterEditor" placeholder="Paste updated JSON here.">{"user":{"profile":{"name":"ahmed","age":31,"address":{"city":"Abu Dhabi","geo":{"lat":25.2,"lng":55.4,"alt":10}}},"tags":["b","c"],"items":[{"id":1,"name":"item1-updated","meta":{"x":2}},{"id":3,"name":"item3"}]},"status":"inactive","count":"five","extra":{"level1":{"level2":{"level3":{"level4":{"level5":"deep"}}}}}}</textarea>
         <div class="err" id="afterErr"></div>
         <div class="editor-actions">
           <label class="btn" for="afterFile">Upload</label>
           <input type="file" id="afterFile" accept=".json,application/json" hidden>
           <button class="btn" id="afterClear">Clear</button>
           <button class="btn" id="afterFormat">Format JSON</button>
+          <button class="btn" id="afterCompact">Compact JSON</button>
         </div>
       </div>
     </div>
@@ -264,7 +270,7 @@ details pre {
         <select class="group-select" id="groupBy">
           <option value="none">No grouping</option>
           <option value="operation">Group by operation</option>
-          <option value="path">Group by parent path</option>
+          <option value="path" selected>Group by parent path</option>
         </select>
       </div>
       <div class="change-list" id="changeList"></div>
@@ -275,11 +281,15 @@ details pre {
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
         <strong>Export</strong>
       </div>
+      <textarea id="exportPreview" readonly style="width:100%; min-height:120px; font-family:'SF Mono',Menlo,monospace; font-size:12px; background:var(--editor-bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;"></textarea>
       <div class="export-row">
-        <button class="btn" id="copyAllDesc">Copy All Descriptions</button>
-        <button class="btn" id="downloadMd">Download Markdown</button>
-        <button class="btn" id="downloadCsv">Download CSV</button>
-        <button class="btn" id="downloadJson">Download JSON Changes</button>
+        <button class="btn" id="copyPreview">Copy</button>
+        <button class="btn" id="downloadPreview">Download</button>
+        <button class="btn" id="copyAllDesc">Descriptions</button>
+        <button class="btn" id="copyCompact">Compact</button>
+        <button class="btn" id="downloadMd">Markdown</button>
+        <button class="btn" id="downloadCsv">CSV</button>
+        <button class="btn" id="downloadJson">JSON</button>
         <button class="btn" id="toggleTree">Show Visual Diff</button>
       </div>
       <div id="treeWrap" hidden style="margin-top:12px;">
@@ -662,11 +672,13 @@ self.onmessage = function (e) {
   try { eval(workerCode); } catch (e) { console.error('eval worker code failed', e); }
 
   let events = [];
-  let currentFilter = 'all';
+  let selectedOps = new Set(['ADD', 'REMOVE', 'UPDATE', 'TYPE_CHANGE']);
   let searchQuery = '';
-  let groupBy = 'none';
+  let groupBy = 'path';
   let page = 0;
   const pageSize = 100;
+  let currentExport = {filename: 'json-change-export.txt', type: 'text/plain'};
+  let currentFormat = 'descriptions';
 
   // helpers
   function lineColFromPos(text, pos) {
@@ -706,6 +718,39 @@ self.onmessage = function (e) {
     if (v === undefined) return '';
     try { return typeof v === 'string' ? v : JSON.stringify(v); } catch (e) { return ''; }
   }
+  function findPathInJson(obj, needle) {
+    needle = String(needle == null ? '' : needle).trim().replace(/^["']|["']$/g, '');
+    let result = null;
+    function rec(o, path) {
+      if (result) return;
+      if (o === null || typeof o !== 'object') {
+        if (needle && String(o) === needle) { result = path || 'root'; }
+        return;
+      }
+      if (Array.isArray(o)) {
+        for (let i = 0; i < o.length; i++) {
+          const childPath = path ? path + '[' + i + ']' : '[' + i + ']';
+          // check index? no
+          rec(o[i], childPath);
+          if (result) return;
+        }
+      } else {
+        for (const k of Object.keys(o)) {
+          if (needle && k === needle) { result = path ? path + '.' + k : k; return; }
+          const childPath = path ? path + '.' + k : k;
+          rec(o[k], childPath);
+          if (result) return;
+        }
+      }
+    }
+    rec(obj, '');
+    // if no needle, return first key
+    if (!result && !needle && obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      const ks = Object.keys(obj);
+      if (ks.length) result = ks[0];
+    }
+    return result;
+  }
 
   // file upload
   function bindFile(inputId, editor) {
@@ -731,6 +776,16 @@ self.onmessage = function (e) {
   document.getElementById('afterFormat').addEventListener('click', () => {
     afterErr.textContent = '';
     try { const v = JSON.parse(afterEditor.value); afterEditor.value = JSON.stringify(v, null, 2); }
+    catch (e) { afterErr.textContent = 'Invalid JSON: ' + e.message; }
+  });
+  document.getElementById('beforeCompact').addEventListener('click', () => {
+    beforeErr.textContent = '';
+    try { const v = JSON.parse(beforeEditor.value); beforeEditor.value = JSON.stringify(v); }
+    catch (e) { beforeErr.textContent = 'Invalid JSON: ' + e.message; }
+  });
+  document.getElementById('afterCompact').addEventListener('click', () => {
+    afterErr.textContent = '';
+    try { const v = JSON.parse(afterEditor.value); afterEditor.value = JSON.stringify(v); }
     catch (e) { afterErr.textContent = 'Invalid JSON: ' + e.message; }
   });
   document.getElementById('swapBtn').addEventListener('click', () => {
@@ -779,30 +834,51 @@ self.onmessage = function (e) {
   });
 
   // filters
+  const opMap = {add: 'ADD', remove: 'REMOVE', update: 'UPDATE', type_change: 'TYPE_CHANGE'};
+  function updateFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      const f = btn.getAttribute('data-filter');
+      if (f === 'all') {
+        btn.classList.toggle('active', selectedOps.size === 4);
+      } else {
+        btn.classList.toggle('active', selectedOps.has(opMap[f]));
+      }
+    });
+  }
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.getAttribute('data-filter');
+      const f = btn.getAttribute('data-filter');
+      if (f === 'all') {
+        if (selectedOps.size === 4) selectedOps.clear();
+        else selectedOps = new Set(['ADD', 'REMOVE', 'UPDATE', 'TYPE_CHANGE']);
+      } else {
+        const op = opMap[f];
+        if (selectedOps.has(op)) selectedOps.delete(op);
+        else selectedOps.add(op);
+      }
       page = 0;
+      updateFilterButtons();
       renderChangeList();
+      updateExportPreview();
     });
   });
+  updateFilterButtons();
   document.getElementById('searchInput').addEventListener('input', (e) => {
     searchQuery = e.target.value || '';
     page = 0;
     renderChangeList();
+    updateExportPreview();
   });
   document.getElementById('groupBy').addEventListener('change', (e) => {
     groupBy = e.target.value;
     page = 0;
     renderChangeList();
+    updateExportPreview();
   });
 
   function filterOp(ev) {
-    if (currentFilter === 'all') return true;
-    const map = {add: 'ADD', remove: 'REMOVE', update: 'UPDATE', type_change: 'TYPE_CHANGE'};
-    return ev.operation === map[currentFilter];
+    if (selectedOps.size === 0 || selectedOps.size === 4) return true;
+    return selectedOps.has(ev.operation);
   }
   function getFiltered() {
     let list = events.filter(filterOp);
@@ -843,9 +919,14 @@ self.onmessage = function (e) {
     if (events.length === 0) {
       document.getElementById('changeList').innerHTML = '<div class="no-changes">No changes detected. Both JSON documents are identical.</div>';
       document.getElementById('pagination').innerHTML = '';
+      const preview = document.getElementById('exportPreview');
+      if (preview) preview.value = '';
       return;
     }
     renderChangeList();
+    currentFormat = 'descriptions';
+    currentExport = {filename: 'json-change-descriptions.txt', type: 'text/plain'};
+    updateExportPreview();
   }
 
   function renderGroupCard(pathKey, items) {
@@ -856,7 +937,7 @@ self.onmessage = function (e) {
     items.forEach(ev => {
       html += '<div style="margin:4px 0;">' + esc(ev.description) + '</div>';
     });
-    const allDesc = items.map(e => e.description).join('\\n');
+    const allDesc = items.map(e => e.description).join('\n');
     html += '<div class="item-actions"><button class="btn" data-copy-group="' + esc(allDesc) + '">Copy all in group</button></div>';
     div.innerHTML = html;
     div.querySelectorAll('[data-copy-group]').forEach(b => b.addEventListener('click', () => copyText(b.getAttribute('data-copy-group'))));
@@ -894,7 +975,8 @@ self.onmessage = function (e) {
       let html = '';
       html += '<p class="desc">' + esc(ev.description) + '</p>';
       html += '<div class="item-actions">';
-      html += '<button class="btn" data-copy-path="' + esc(ev.path || 'root') + '">Copy path</button>';
+      var _fp = (ev.property != null) ? ((ev.path === 'root' || !ev.path) ? String(ev.property) : ev.path + '.' + ev.property) : (ev.path || 'root');
+      html += '<button class="btn" data-copy-path="' + esc(_fp) + '">Copy path</button>';
       html += '<button class="btn" data-copy-desc="' + esc(ev.description) + '">Copy description</button>';
       html += '</div>';
       div.innerHTML = html;
@@ -961,9 +1043,6 @@ self.onmessage = function (e) {
   }
 
   // export
-  document.getElementById('copyAllDesc').addEventListener('click', () => {
-    copyText(events.map(e => e.description).join('\n'));
-  });
   function download(filename, content, type) {
     const blob = new Blob([content], {type: type});
     const url = URL.createObjectURL(blob);
@@ -972,36 +1051,150 @@ self.onmessage = function (e) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
-  document.getElementById('downloadMd').addEventListener('click', () => {
-    let md = '# JSON Change Report\n\nTotal changes: ' + events.length + '\n\n';
+  function toCompactText(evList) {
+    const groups = {};
+    const order = [];
+    evList.forEach(ev => {
+      const k = (ev.path || '(root)').replace(/\[\d+\]$/, '');
+      if (!groups[k]) { groups[k] = []; order.push(k); }
+      groups[k].push(ev);
+    });
+    const lines = [];
+    order.forEach(path => {
+      lines.push(path);
+      groups[path].forEach(ev => {
+        const op = ev.operation.toLowerCase().replace('type_change', 'change');
+        const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+        if (ev.isArrayItem && ev.property == null) {
+          if (ev.operation === 'ADD') {
+            if (isObj(ev.newValue)) { lines.push('add'); lines.push(JSON.stringify(ev.newValue, null, 2)); }
+            else lines.push('add ' + fmt(ev.newValue));
+          } else if (ev.operation === 'REMOVE') {
+            if (isObj(ev.oldValue)) { lines.push('remove'); lines.push(JSON.stringify(ev.oldValue, null, 2)); }
+            else lines.push('remove ' + fmt(ev.oldValue));
+          } else if (ev.operation === 'UPDATE') {
+            lines.push('update ' + fmt(ev.oldValue) + ' -> ' + fmt(ev.newValue));
+          } else {
+            lines.push(op + ' ' + fmt(ev.oldValue) + ' -> ' + fmt(ev.newValue));
+          }
+        } else {
+          if (ev.operation === 'ADD') lines.push('add "' + ev.property + '": ' + fmt(ev.newValue));
+          else if (ev.operation === 'REMOVE') lines.push('remove "' + ev.property + '"');
+          else if (ev.operation === 'UPDATE') lines.push('update "' + ev.property + '": ' + fmt(ev.newValue));
+          else if (ev.operation === 'TYPE_CHANGE') lines.push('change "' + ev.property + '": ' + fmt(ev.newValue));
+        }
+      });
+    });
+    return lines.join('\n');
+  }
+  function toChangesJson(evList) {
+    const out = {};
+    function setValue(root, segs, val) {
+      if (!segs || segs.length === 0) { root['root'] = val; return; }
+      let cur = root;
+      for (let i = 0; i < segs.length - 1; i++) {
+        const seg = segs[i];
+        const next = segs[i + 1];
+        const container = (next.t === 'i') ? [] : {};
+        if (seg.t === 'i') {
+          if (!Array.isArray(cur)) return;
+          if (cur[seg.v] === undefined) cur[seg.v] = container;
+          cur = cur[seg.v];
+        } else {
+          if (cur[seg.v] === undefined) cur[seg.v] = container;
+          cur = cur[seg.v];
+        }
+      }
+      const last = segs[segs.length - 1];
+      if (last.t === 'i') {
+        if (!Array.isArray(cur)) return;
+        cur[last.v] = val;
+      } else {
+        cur[last.v] = val;
+      }
+    }
+    evList.forEach(e => {
+      let segs = parsePathString(e.path === 'root' ? '' : (e.path || ''));
+      if (e.property != null) segs = segs.concat([{t: 'k', v: e.property}]);
+      const val = (e.operation === 'REMOVE')
+        ? {'__removed__': true}
+        : (e.newValue === undefined ? null : e.newValue);
+      setValue(out, segs, val);
+    });
+    return out;
+  }
+  function buildMarkdown(list) {
+    let md = '# JSON Change Report\n\nTotal changes: ' + list.length + '\n\n';
     const labels = {ADD: 'Added', REMOVE: 'Removed', UPDATE: 'Updated', TYPE_CHANGE: 'Type Changes'};
     ['ADD','REMOVE','UPDATE','TYPE_CHANGE'].forEach(op => {
-      const items = events.filter(e => e.operation === op);
+      const items = list.filter(e => e.operation === op);
       if (!items.length) return;
       md += '## ' + labels[op] + '\n';
       items.forEach((e, i) => { md += (i+1) + '. ' + e.description + '\n'; });
       md += '\n';
     });
-    download('json-change-report.md', md, 'text/markdown');
-  });
-  document.getElementById('downloadCsv').addEventListener('click', () => {
+    return md;
+  }
+  function buildCsv(list) {
     const header = ['Operation','Path','Property','Old Value','New Value','Old Type','New Type','Description'];
     function csvField(v) {
       const s = v === undefined || v === null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
       return '"' + s.replace(/"/g, '""') + '"';
     }
     const rows = [header.join(',')];
-    events.forEach(e => {
+    list.forEach(e => {
       rows.push([
         csvField(e.operation), csvField(e.path), csvField(e.property),
         csvField(e.oldValue), csvField(e.newValue), csvField(e.oldType),
         csvField(e.newType), csvField(e.description)
       ].join(','));
     });
-    download('json-change-report.csv', rows.join('\n'), 'text/csv');
+    return rows.join('\n');
+  }
+  function updateExportPreview() {
+    const list = getFiltered();
+    const preview = document.getElementById('exportPreview');
+    if (!preview) return;
+    if (currentFormat === 'descriptions') preview.value = list.map(e => e.description).join('\n');
+    else if (currentFormat === 'compact') preview.value = toCompactText(list);
+    else if (currentFormat === 'markdown') preview.value = buildMarkdown(list);
+    else if (currentFormat === 'csv') preview.value = buildCsv(list);
+    else if (currentFormat === 'json') preview.value = JSON.stringify(toChangesJson(list), null, 2);
+  }
+
+  document.getElementById('copyPreview').addEventListener('click', () => {
+    const preview = document.getElementById('exportPreview');
+    copyText(preview ? preview.value : getFiltered().map(e => e.description).join('\n'));
+  });
+  document.getElementById('downloadPreview').addEventListener('click', () => {
+    const preview = document.getElementById('exportPreview');
+    const content = preview ? preview.value : getFiltered().map(e => e.description).join('\n');
+    download(currentExport.filename, content, currentExport.type);
+  });
+  document.getElementById('copyAllDesc').addEventListener('click', () => {
+    currentFormat = 'descriptions';
+    currentExport = {filename: 'json-change-descriptions.txt', type: 'text/plain'};
+    updateExportPreview();
+  });
+  document.getElementById('copyCompact').addEventListener('click', () => {
+    currentFormat = 'compact';
+    currentExport = {filename: 'json-change-compact.txt', type: 'text/plain'};
+    updateExportPreview();
+  });
+  document.getElementById('downloadMd').addEventListener('click', () => {
+    currentFormat = 'markdown';
+    currentExport = {filename: 'json-change-report.md', type: 'text/markdown'};
+    updateExportPreview();
+  });
+  document.getElementById('downloadCsv').addEventListener('click', () => {
+    currentFormat = 'csv';
+    currentExport = {filename: 'json-change-report.csv', type: 'text/csv'};
+    updateExportPreview();
   });
   document.getElementById('downloadJson').addEventListener('click', () => {
-    download('json-change-events.json', JSON.stringify(events, null, 2), 'application/json');
+    currentFormat = 'json';
+    currentExport = {filename: 'json-changes.json', type: 'application/json'};
+    updateExportPreview();
   });
 
   // visual tree
@@ -1092,6 +1285,88 @@ self.onmessage = function (e) {
     }
     function hasOwnObj(o,k){ return Object.prototype.hasOwnProperty.call(o,k); }
     container.innerHTML = build(before, after, 0);
+  }
+
+  // Get Path feature
+  let selectedPath = null;
+  const getPathBtn = document.getElementById('getPathBtn');
+  if (getPathBtn) {
+    getPathBtn.addEventListener('click', () => {
+      // 1. selected change item
+      let p = null;
+      if (selectedPath) {
+        p = (selectedPath.property != null) ? ((selectedPath.path === 'root' || !selectedPath.path) ? String(selectedPath.property) : selectedPath.path + '.' + selectedPath.property) : (selectedPath.path || 'root');
+      }
+      // 2. search input match among changes
+      if (!p) {
+        const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+        const filtered = (typeof getFiltered === 'function') ? getFiltered() : [];
+        let target = null;
+        if (q) target = filtered.find(ev => (ev.property || '').toLowerCase().includes(q) || (ev.path || '').toLowerCase().includes(q)) || null;
+        if (!target && filtered.length) target = filtered[0];
+        if (target) p = (target.property != null) ? ((target.path === 'root' || !target.path) ? String(target.property) : target.path + '.' + target.property) : (target.path || 'root');
+      }
+      // 3. no compare: find path in Before JSON using selected text or first key
+      if (!p) {
+        const ed = document.getElementById('beforeEditor');
+        let needle = '';
+        if (ed && typeof ed.selectionStart === 'number' && ed.selectionStart !== ed.selectionEnd) {
+          needle = ed.value.slice(ed.selectionStart, ed.selectionEnd);
+        }
+        let obj = null;
+        try { obj = JSON.parse(ed.value); } catch (e) { obj = null; }
+        if (obj) {
+          if (!needle.trim()) {
+            // default to first top-level key
+            if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+              const ks = Object.keys(obj);
+              if (ks.length) needle = ks[0];
+            } else if (Array.isArray(obj) && obj.length) {
+              needle = '';
+            }
+          }
+          p = findPathInJson(obj, needle);
+        }
+      }
+      if (!p) {
+        alert('No path found. Select a property or run Compare.');
+        return;
+      }
+      const out = document.getElementById('pathOutput');
+      if (out) out.value = p;
+      copyText(p);
+      const prev = getPathBtn.textContent;
+      getPathBtn.textContent = 'Copied: ' + p;
+      setTimeout(() => { getPathBtn.textContent = prev; }, 1500);
+    });
+  }
+
+  const copyPathBtn = document.getElementById('copyPathBtn');
+  if (copyPathBtn) {
+    copyPathBtn.addEventListener('click', () => {
+      const out = document.getElementById('pathOutput');
+      const p = out ? out.value : '';
+      if (p) copyText(p);
+    });
+  }
+
+  const changeListEl = document.getElementById('changeList');
+  if (changeListEl) {
+    changeListEl.addEventListener('click', (e) => {
+      const item = e.target && e.target.closest ? e.target.closest('.change-item') : null;
+      if (!item || !changeListEl.contains(item)) return;
+      changeListEl.querySelectorAll('.change-item.selected').forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+      const desc = item.querySelector('.desc');
+      const descText = desc ? desc.textContent : '';
+      const match = events.find(ev => ev.description === descText);
+      if (match) {
+        selectedPath = match;
+        const out = document.getElementById('pathOutput');
+        const _p = (match.property != null) ? ((match.path === 'root' || !match.path) ? String(match.property) : match.path + '.' + match.property) : (match.path || 'root');
+        if (out) out.value = _p;
+      }
+    });
   }
 })();
 </script>

@@ -168,6 +168,19 @@ textarea.editor::-webkit-scrollbar-corner { background: transparent; }
 .tok-punct { color: var(--muted); }
 
 .editor-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn.autofix { border-color: var(--accent); color: var(--accent); }
+.btn.autofix:hover { background: var(--accent-soft); }
+.err.ok { color: var(--add); }
+.fix-report {
+  font-size: 12px; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--editor-bg); padding: 8px 10px; max-height: 140px; overflow: auto;
+}
+.fix-report.ok { color: var(--add); border-color: var(--add); }
+.fix-report.bad { color: var(--remove); border-color: var(--remove); }
+.fix-report .fix-head { font-weight: 600; margin-bottom: 4px; color: var(--text); }
+.fix-report ul { margin: 0; padding-left: 18px; }
+.fix-report li { margin: 1px 0; }
 .path-row {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-top: 16px; padding: 10px;
@@ -449,7 +462,7 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
         </div>
         <div class="editor-shell" id="beforeShell">
           <pre class="editor-highlight" id="beforeHighlight" aria-hidden="true"></pre>
-          <textarea class="editor" id="beforeEditor" wrap="off" spellcheck="false" aria-label="Before JSON" placeholder="Paste original JSON here.">{"user":{"profile":{"name":"ahmed","age":30,"address":{"city":"Dubai","zip":12345,"geo":{"lat":25.2,"lng":55.3}}},"tags":["a","b"],"items":[{"id":1,"name":"item1","meta":{"x":1}},{"id":2,"name":"item2"}]},"status":"active","count":5}</textarea>
+          <textarea class="editor" id="beforeEditor" wrap="off" spellcheck="false" aria-label="Before JSON" placeholder="Paste original JSON here."></textarea>
         </div>
         <div class="err" id="beforeErr" aria-live="polite"></div>
         <div class="editor-actions">
@@ -461,7 +474,9 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
           <button class="btn" id="beforeClear">Clear</button>
           <button class="btn" id="beforeFormat" title="Pretty-print with 2-space indentation">Format</button>
           <button class="btn" id="beforeCompact" title="Strip all whitespace">Compact</button>
+          <button class="btn autofix" id="beforeAutofix" title="Fix common JSON errors: smart quotes, single quotes, trailing/missing commas, unquoted keys, comments, trailing commas, control chars">✦ Auto-fix</button>
         </div>
+        <div class="fix-report" id="beforeFixReport" hidden></div>
       </div>
       <div class="editor-block">
         <div class="editor-head">
@@ -470,7 +485,7 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
         </div>
         <div class="editor-shell" id="afterShell">
           <pre class="editor-highlight" id="afterHighlight" aria-hidden="true"></pre>
-          <textarea class="editor" id="afterEditor" wrap="off" spellcheck="false" aria-label="After JSON" placeholder="Paste updated JSON here.">{"user":{"profile":{"name":"ahmed","age":31,"address":{"city":"Abu Dhabi","geo":{"lat":25.2,"lng":55.4,"alt":10}}},"tags":["b","c"],"items":[{"id":1,"name":"item1-updated","meta":{"x":2}},{"id":3,"name":"item3"}]},"status":"inactive","count":"five","extra":{"level1":{"level2":{"level3":{"level4":{"level5":"deep"}}}}}}</textarea>
+          <textarea class="editor" id="afterEditor" wrap="off" spellcheck="false" aria-label="After JSON" placeholder="Paste updated JSON here."></textarea>
         </div>
         <div class="err" id="afterErr" aria-live="polite"></div>
         <div class="editor-actions">
@@ -482,7 +497,9 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
           <button class="btn" id="afterClear">Clear</button>
           <button class="btn" id="afterFormat" title="Pretty-print with 2-space indentation">Format</button>
           <button class="btn" id="afterCompact" title="Strip all whitespace">Compact</button>
+          <button class="btn autofix" id="afterAutofix" title="Fix common JSON errors: smart quotes, single quotes, trailing/missing commas, unquoted keys, comments, trailing commas, control chars">✦ Auto-fix</button>
         </div>
+        <div class="fix-report" id="afterFixReport" hidden></div>
       </div>
       <button class="swap-fab" id="swapBtn" title="Swap the two documents" aria-label="Swap before and after">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13"/><path d="m14 4 3 3-3 3"/><path d="M20 17H7"/><path d="m10 20-3-3 3-3"/></svg>
@@ -500,6 +517,7 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
         Compare
       </button>
       <button class="btn" id="loadSampleBtn" title="Restore the example documents">Load sample</button>
+      <button class="btn" id="clearAllBtn" title="Clear both editors">Clear all</button>
       <span class="spacer">
         <span class="hint"><kbd>Ctrl/⌘</kbd>+<kbd>↵</kbd> to compare · <kbd>/</kbd> to search</span>
       </span>
@@ -1001,8 +1019,8 @@ self.onmessage = function (e) {
   let selectedOps = new Set(['ADD', 'REMOVE', 'UPDATE', 'TYPE_CHANGE']);
   let searchQuery = '';
   let groupBy = 'path';
-  let page = 0;
-  const pageSize = 100;
+  let visibleCount = 3;
+  const VISIBLE_STEP = 3;
   let currentExport = {filename: 'json-change-export.txt', type: 'text/plain'};
   let currentFormat = 'descriptions';
 
@@ -1171,6 +1189,109 @@ self.onmessage = function (e) {
   const pills = { before: document.getElementById('beforePill'), after: document.getElementById('afterPill') };
   const HIGHLIGHT_LIMIT = 150000;
 
+  // --- JSON auto-fix (scanner-aware; string contents untouched except quote fixes) ---
+  function fixJson(text) {
+    const notes = [];
+    let s = text;
+    if (!s.trim()) return { fixed: s, fixes: [] };
+
+    const SMART = [[/[\u201C\u201D\u201E\u201F]/g, 'smart double quotes'], [/[\u2018\u2019\u201A\u2032]/g, 'smart single quotes'], [/[\u00AB\u00BB]/g, 'guillemets'], [/[\u2033\u2036]/g, 'double-prime quotes']];
+    for (const [re, label] of SMART) if (re.test(s)) { s = s.replace(re, '"'); notes.push('Replaced ' + label + ' with "'); }
+
+    const toks = [];
+    let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (c === '"') { let j = i + 1; while (j < s.length) { if (s[j] === '\\') { j += 2; continue; } if (s[j] === '"') { j++; break; } j++; } toks.push({ kind: 'str', text: s.slice(i, j) }); i = j; }
+      else if (c === "'") { let j = i + 1; while (j < s.length) { if (s[j] === '\\') { j += 2; continue; } if (s[j] === "'") { j++; break; } j++; } toks.push({ kind: 'sqr', text: s.slice(i, j) }); i = j; }
+      else if (c === '/' && s[i + 1] === '/') { let j = s.indexOf('\n', i + 2); if (j === -1) j = s.length; toks.push({ kind: 'comment', text: s.slice(i, j) }); i = j; }
+      else if (c === '/' && s[i + 1] === '*') { let j = s.indexOf('*/', i + 2); j = (j === -1 ? s.length : j + 2); toks.push({ kind: 'comment', text: s.slice(i, j) }); i = j; }
+      else if ('{}[],:'.includes(c)) { toks.push({ kind: 'punct', text: c }); i++; }
+      else if (/\s/.test(c)) { let j = i; while (j < s.length && /\s/.test(s[j])) j++; toks.push({ kind: 'ws', text: s.slice(i, j) }); i = j; }
+      else { let j = i; while (j < s.length && !/\s/.test(s[j]) && !'{}[],:"\''.includes(s[j])) j++; if (j === i) j++; toks.push({ kind: 'bare', text: s.slice(i, j) }); i = j; }
+    }
+    const sig = toks.map((t, k) => (t.kind !== 'ws' && t.kind !== 'comment') ? k : -1).filter(k => k >= 0);
+    const pos = new Map(sig.map((k, idx) => [k, idx]));
+    const nextOf = k => { const p = pos.get(k); return (p !== undefined && p + 1 < sig.length) ? toks[sig[p + 1]] : null; };
+    const prevOf = k => { const p = pos.get(k); return (p !== undefined && p > 0) ? toks[sig[p - 1]] : null; };
+    const note = m => { if (!notes.includes(m)) notes.push(m); };
+
+    let out = '';
+    for (let k = 0; k < toks.length; k++) {
+      const t = toks[k];
+      if (t.kind === 'ws') { out += t.text; continue; }
+      if (t.kind === 'comment') { note('Removed comments'); out += t.text.startsWith('/*') ? ' ' : ''; continue; }
+      const next = nextOf(k), prev = prevOf(k);
+      if (t.kind === 'sqr') {
+        const inner = (t.text.length >= 2 && t.text.endsWith("'")) ? t.text.slice(1, -1) : t.text.slice(1);
+        out += '"' + inner.replace(/\\'/g, "'").replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+        note('Converted single-quoted strings to double quotes'); continue;
+      }
+      if (t.kind === 'str') { out += t.text; continue; }
+      if (t.kind === 'bare') {
+        const w = t.text;
+        if (w === 'true' || w === 'false' || w === 'null' || /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(w)) { out += w; continue; }
+        if (/^(NaN|Infinity|-Infinity)$/.test(w)) { out += 'null'; note('Replaced NaN/Infinity with null'); continue; }
+        if (next && next.text === ':') { out += JSON.stringify(w); note('Quoted unquoted keys'); continue; }
+        out += JSON.stringify(w); note('Quoted unquoted string values'); continue;
+      }
+      if (t.text === ',' && next && (next.text === '}' || next.text === ']')) { note('Removed trailing commas'); continue; }
+      out += t.text;
+    }
+
+    // Insert missing commas: value-end followed directly by a value/key start
+    const re = tokenizeJson(out);
+    let rebuilt = '', prevSig = null;
+    for (const t of re) {
+      if (t.kind === 'ws') { rebuilt += t.text; continue; }
+      const isValEnd = prevSig && (prevSig.kind === 'str' || prevSig.kind === 'key' || prevSig.kind === 'num' || prevSig.kind === 'kw' || prevSig.text === '}' || prevSig.text === ']');
+      const startsVal = (t.kind === 'str' || t.kind === 'key' || t.kind === 'num' || t.kind === 'kw' || t.text === '{' || t.text === '[');
+      if (isValEnd && startsVal) { rebuilt = rebuilt.replace(/\s*$/, '') + ', '; note('Inserted missing commas'); }
+      rebuilt += t.text; prevSig = t;
+    }
+    rebuilt = rebuilt.replace(/,\s*,/g, ',').replace(/,\s*([}\]])/g, '$1');
+
+    // Close unclosed braces/brackets (ignore strings)
+    const stack = [];
+    for (let p = 0; p < rebuilt.length; p++) {
+      const c = rebuilt[p];
+      if (c === '"') { p++; while (p < rebuilt.length) { if (rebuilt[p] === '\\') { p += 2; continue; } if (rebuilt[p] === '"') break; p++; } continue; }
+      if (c === '{') stack.push('}'); else if (c === '[') stack.push(']');
+      else if ((c === '}' || c === ']') && stack[stack.length - 1] === c) stack.pop();
+    }
+    if (stack.length) { rebuilt += stack.reverse().join(''); note('Closed unclosed braces/brackets'); }
+
+    // Escape literal control chars inside strings
+    let fixed = '', inStr = false;
+    for (let p = 0; p < rebuilt.length; p++) {
+      const c = rebuilt[p];
+      if (c === '"' && rebuilt[p - 1] !== '\\') inStr = !inStr;
+      if (inStr && c < ' ' && c !== '\n') { fixed += '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'); note('Escaped control characters in strings'); }
+      else fixed += c;
+    }
+    return { fixed, fixes: notes };
+  }
+
+  function doAutofix(key) {
+    const errEl = key === 'before' ? beforeErr : afterErr;
+    const reportEl = document.getElementById(key + 'FixReport');
+    const text = editors[key].value;
+    if (!text.trim()) { errEl.textContent = 'Enter JSON first.'; errEl.className = 'err'; return; }
+    let fixed, fixes;
+    try { ({ fixed, fixes } = fixJson(text)); } catch (e) { errEl.textContent = 'Auto-fix failed: ' + e.message; errEl.className = 'err'; return; }
+    if (fixed !== text) setEditorValue(key, fixed);
+    if (reportEl) {
+      reportEl.hidden = false; reportEl.className = 'fix-report';
+      let valid = true, msg = '';
+      try { JSON.parse(fixed); } catch (e) { valid = false; msg = e.message; }
+      if (!fixes.length && valid) { reportEl.classList.add('ok'); reportEl.textContent = '✓ No fixes needed — already valid JSON.'; errEl.textContent = ''; }
+      else if (!fixes.length && !valid) { reportEl.classList.add('bad'); reportEl.textContent = '✕ Could not auto-fix. Remaining error: ' + msg; errEl.textContent = 'Invalid JSON: ' + msg; errEl.className = 'err'; }
+      else if (valid) { reportEl.classList.add('ok'); reportEl.innerHTML = '<div class="fix-head">✓ Applied ' + fixes.length + ' fix' + (fixes.length === 1 ? '' : 'es') + ' — now valid JSON:</div><ul>' + fixes.map(f => '<li>' + esc(f) + '</li>').join('') + '</ul>'; errEl.textContent = '✓ Auto-fixed'; errEl.className = 'err ok'; }
+      else { reportEl.classList.add('bad'); reportEl.innerHTML = '<div class="fix-head">✕ Partially fixed, still invalid:</div><ul>' + fixes.map(f => '<li>' + esc(f) + '</li>').join('') + '</ul>Remaining: ' + esc(msg); errEl.textContent = 'Invalid JSON: ' + msg; errEl.className = 'err'; }
+      if (valid) errEl.className = 'err ok';
+    }
+  }
+
   const SAMPLE_BEFORE = '{"user":{"profile":{"name":"ahmed","age":30,"address":{"city":"Dubai","zip":12345,"geo":{"lat":25.2,"lng":55.3}}},"tags":["a","b"],"items":[{"id":1,"name":"item1","meta":{"x":1}},{"id":2,"name":"item2"}]},"status":"active","count":5}';
   const SAMPLE_AFTER = '{"user":{"profile":{"name":"ahmed","age":31,"address":{"city":"Abu Dhabi","geo":{"lat":25.2,"lng":55.4,"alt":10}}},"tags":["b","c"],"items":[{"id":1,"name":"item1-updated","meta":{"x":2}},{"id":3,"name":"item3"}]},"status":"inactive","count":"five","extra":{"level1":{"level2":{"level3":{"level4":{"level5":"deep"}}}}}}';
 
@@ -1303,6 +1424,8 @@ self.onmessage = function (e) {
     editors[key].addEventListener('input', () => {
       paintDebounced[key]();
       pillDebounced[key]();
+      const r = document.getElementById(key + 'FixReport');
+      if (r) r.hidden = true;
     });
     editors[key].addEventListener('scroll', () => syncEditorScroll(key), { passive: true });
   });
@@ -1339,6 +1462,14 @@ self.onmessage = function (e) {
     beforeErr.textContent = '';
     afterErr.textContent = '';
   });
+  document.getElementById('clearAllBtn').addEventListener('click', () => {
+    setEditorValue('before', '');
+    setEditorValue('after', '');
+    beforeErr.textContent = '';
+    afterErr.textContent = '';
+  });
+  document.getElementById('beforeAutofix').addEventListener('click', () => doAutofix('before'));
+  document.getElementById('afterAutofix').addEventListener('click', () => doAutofix('after'));
   document.getElementById('swapBtn').addEventListener('click', () => {
     const t = editors.before.value;
     setEditorValue('before', editors.after.value);
@@ -1376,7 +1507,7 @@ self.onmessage = function (e) {
       try {
         const ev = compareAll(br.value, ar.value, {arrayStrategy, identityKey, ignoredPaths});
         events = ev || [];
-        page = 0;
+        visibleCount = VISIBLE_STEP;
         progressOverlay.hidden = true;
         renderResults();
         const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1417,7 +1548,7 @@ self.onmessage = function (e) {
         if (selectedOps.has(op)) selectedOps.delete(op);
         else selectedOps.add(op);
       }
-      page = 0;
+      visibleCount = VISIBLE_STEP;
       updateFilterButtons();
       renderChangeList();
       updateExportPreview();
@@ -1426,13 +1557,13 @@ self.onmessage = function (e) {
   updateFilterButtons();
   document.getElementById('searchInput').addEventListener('input', (e) => {
     searchQuery = e.target.value || '';
-    page = 0;
+    visibleCount = VISIBLE_STEP;
     renderChangeList();
     updateExportPreview();
   });
   document.getElementById('groupBy').addEventListener('change', (e) => {
     groupBy = e.target.value;
-    page = 0;
+    visibleCount = VISIBLE_STEP;
     renderChangeList();
     updateExportPreview();
   });
@@ -1478,7 +1609,7 @@ self.onmessage = function (e) {
         } else {
           selectedOps.add(op);
         }
-        page = 0;
+        visibleCount = VISIBLE_STEP;
         updateFilterButtons();
         renderChangeList();
         updateExportPreview();
@@ -1531,18 +1662,20 @@ self.onmessage = function (e) {
       return;
     }
 
-    // grouping
+    // grouping: limit visible entries (groups when grouped, changes otherwise)
     let groups = null;
-    if (groupBy === 'operation') {
+    let groupKeys = null;
+    if (groupBy === 'operation' || groupBy === 'path') {
       groups = {};
-      list.forEach(ev => { (groups[ev.operation] = groups[ev.operation] || []).push(ev); });
-    } else if (groupBy === 'path') {
-      groups = {};
-      list.forEach(ev => { const k = ev.path || '(root)'; (groups[k] = groups[k] || []).push(ev); });
+      groupKeys = [];
+      list.forEach(ev => {
+        const k = groupBy === 'operation' ? ev.operation : (ev.path || '(root)');
+        if (!groups[k]) { groups[k] = []; groupKeys.push(k); }
+        groups[k].push(ev);
+      });
     }
-
-    const start = page * pageSize;
-    const pageItems = list.slice(start, start + pageSize);
+    const totalEntries = groupKeys ? groupKeys.length : list.length;
+    const entries = groupKeys ? groupKeys.slice(0, visibleCount) : list.slice(0, visibleCount);
 
     function renderItem(ev) {
       const div = document.createElement('div');
@@ -1577,13 +1710,7 @@ self.onmessage = function (e) {
     }
 
     if (groups) {
-      const groupKeys = [];
-      const seen = new Set();
-      list.forEach(ev => {
-        const k = groupBy === 'operation' ? ev.operation : (ev.path || '(root)');
-        if (!seen.has(k)) { seen.add(k); groupKeys.push(k); }
-      });
-      groupKeys.forEach(k => {
+      entries.forEach(k => {
         const gItems = groups[k];
         if (groupBy === 'path') {
           container.appendChild(renderGroupCard(k, gItems));
@@ -1596,28 +1723,27 @@ self.onmessage = function (e) {
         }
       });
     } else {
-      pageItems.forEach(ev => container.appendChild(renderItem(ev)));
+      entries.forEach(ev => container.appendChild(renderItem(ev)));
     }
 
-    // pagination controls
+    // show more
     pag.innerHTML = '';
-    const totalPages = Math.ceil(list.length / pageSize);
-    if (totalPages > 1) {
-      const prev = document.createElement('button');
-      prev.className = 'btn'; prev.textContent = 'Prev';
-      prev.disabled = page === 0;
-      prev.addEventListener('click', () => { page = Math.max(0, page-1); renderChangeList(); });
-      const next = document.createElement('button');
-      next.className = 'btn'; next.textContent = 'Next';
-      next.disabled = page >= totalPages - 1;
-      next.addEventListener('click', () => { page = Math.min(totalPages-1, page+1); renderChangeList(); });
-      const info = document.createElement('span');
-      info.textContent = 'Page ' + (page+1) + ' of ' + totalPages + ' (' + list.length + ' changes)';
-      pag.appendChild(prev); pag.appendChild(info); pag.appendChild(next);
+    const info = document.createElement('span');
+    if (groups) {
+      info.textContent = 'Showing ' + entries.length + ' of ' + totalEntries + ' group' + (totalEntries === 1 ? '' : 's') + ' (' + list.length + ' changes)';
     } else {
-      const info = document.createElement('span');
-      info.textContent = list.length + ' change' + (list.length === 1 ? '' : 's');
-      pag.appendChild(info);
+      info.textContent = 'Showing ' + entries.length + ' of ' + list.length + ' change' + (list.length === 1 ? '' : 's');
+    }
+    pag.appendChild(info);
+    if (entries.length < totalEntries) {
+      const more = document.createElement('button');
+      more.className = 'btn';
+      more.textContent = 'Show more';
+      more.addEventListener('click', () => {
+        visibleCount += VISIBLE_STEP;
+        renderChangeList();
+      });
+      pag.appendChild(more);
     }
   }
 
@@ -2000,7 +2126,7 @@ self.onmessage = function (e) {
     if (e.key === 'Escape' && e.target.value) {
       e.target.value = '';
       searchQuery = '';
-      page = 0;
+      visibleCount = VISIBLE_STEP;
       renderChangeList();
       updateExportPreview();
       e.stopPropagation();

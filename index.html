@@ -168,22 +168,26 @@ textarea.editor::-webkit-scrollbar-corner { background: transparent; }
 .tok-punct { color: var(--muted); }
 
 .editor-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.path-tools {
-  display:flex; align-items:center; gap:6px; flex:1 1 250px; min-width: 230px;
-  border:1px solid var(--border); border-radius: 9px; padding: 3px 6px;
-  background: var(--editor-bg); transition: border-color .15s;
+.path-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 16px; padding: 10px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--editor-bg);
 }
-.path-tools:focus-within { border-color: var(--accent); }
-.path-tools .path-key {
-  flex:none; font-size:11px; font-weight:600; color:var(--muted);
-  text-transform:uppercase; letter-spacing:.05em; padding:0 4px;
+.path-row .path-key {
+  flex: none; font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .05em; padding: 0 4px;
 }
-#pathOutput {
-  flex:1; min-width:70px; border:none; background:transparent; outline:none;
-  color: var(--accent); font-family: var(--font-mono); font-size:12px; padding: 5px 2px;
+.path-row #pathOutput {
+  flex: 1 1 240px; min-width: 0; height: 34px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--card); color: var(--accent);
+  font-family: var(--font-mono); font-size: 12.5px; padding: 0 10px;
+  transition: border-color .15s;
 }
-.path-tools .btn { padding: 5px 9px; font-size: 12px; border-color: transparent; background: transparent; }
-.path-tools .btn:hover { border-color: var(--accent); background: var(--btn-hover-bg); }
+.path-row #pathOutput:focus { border-color: var(--accent); outline: none; }
+.path-row #pathOutput::placeholder { color: var(--muted); opacity: .75; }
+.path-row .btn { height: 34px; padding: 0 14px; }
 
 /* swap button sitting between the two editors */
 .swap-fab {
@@ -457,12 +461,6 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
           <button class="btn" id="beforeClear">Clear</button>
           <button class="btn" id="beforeFormat" title="Pretty-print with 2-space indentation">Format</button>
           <button class="btn" id="beforeCompact" title="Strip all whitespace">Compact</button>
-          <div class="path-tools" title="Extract the JSON path at the caret position, or from a selected change">
-            <span class="path-key">Path</span>
-            <input type="text" id="pathOutput" readonly placeholder="Run a comparison or click a change...">
-            <button class="btn" id="getPathBtn">Get</button>
-            <button class="btn" id="copyPathBtn">Copy</button>
-          </div>
         </div>
       </div>
       <div class="editor-block">
@@ -489,6 +487,12 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
       <button class="swap-fab" id="swapBtn" title="Swap the two documents" aria-label="Swap before and after">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13"/><path d="m14 4 3 3-3 3"/><path d="M20 17H7"/><path d="m10 20-3-3 3-3"/></svg>
       </button>
+    </div>
+    <div class="path-row" title="Click a change item in the results, select text, or place the caret inside Before JSON — then press Get Path">
+      <span class="path-key">Path</span>
+      <input type="text" id="pathOutput" readonly placeholder="Click a change item, select text, or place the caret in Before JSON…" aria-label="Extracted JSON path">
+      <button class="btn" id="getPathBtn" title="Extract the JSON path and copy it">Get Path</button>
+      <button class="btn" id="copyPathBtn" title="Copy the current path to the clipboard">Copy</button>
     </div>
     <div class="compare-row">
       <button class="btn primary compare" id="compareBtn" title="Compare both documents (Ctrl/Cmd + Enter)">
@@ -551,7 +555,7 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
 
     <section class="card">
       <div class="card-title">Export</div>
-      <textarea id="exportPreview" readonly style="width:100%; min-height:120px; font-family:'SF Mono',Menlo,monospace; font-size:12px; background:var(--editor-bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;"></textarea>
+      <textarea id="exportPreview" readonly style="width:100%; min-height:360px; font-family:'SF Mono',Menlo,monospace; font-size:12px; background:var(--editor-bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; resize:vertical;"></textarea>
       <div class="export-row">
         <button class="btn" id="copyPreview">Copy</button>
         <button class="btn" id="downloadPreview">Download</button>
@@ -1937,15 +1941,12 @@ self.onmessage = function (e) {
         }
       }
       if (!p) {
-        alert('No path found. Select a property or run Compare.');
+        alert('No path found yet. Click a change item, or place the caret inside Before JSON first.');
         return;
       }
       const out = document.getElementById('pathOutput');
       if (out) out.value = p;
-      copyText(p);
-      const prev = getPathBtn.textContent;
-      getPathBtn.textContent = 'Copied: ' + p;
-      setTimeout(() => { getPathBtn.textContent = prev; }, 1500);
+      copyText(p, getPathBtn);
     });
   }
 

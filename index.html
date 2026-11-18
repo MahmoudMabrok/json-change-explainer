@@ -261,6 +261,7 @@ textarea.editor::-webkit-scrollbar-corner { background: transparent; }
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--editor-bg);
 }
+.path-row[hidden] { display: none; }
 .path-row .path-key {
   flex: none; font-size: 11px; font-weight: 600; color: var(--muted);
   text-transform: uppercase; letter-spacing: .05em; padding: 0 4px;
@@ -615,7 +616,7 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13"/><path d="m14 4 3 3-3 3"/><path d="M20 17H7"/><path d="m10 20-3-3 3-3"/></svg>
       </button>
     </div>
-    <div class="path-row" title="Click a change item in the results, select text, or place the caret inside Before JSON — then press Get Path">
+    <div class="path-row" id="pathRow" title="Click a change item in the results, select text, or place the caret inside Before JSON — then press Get Path">
       <span class="path-key">Path</span>
       <input type="text" id="pathOutput" readonly placeholder="Click a change item, select text, or place the caret in Before JSON…" aria-label="Extracted JSON path">
       <button class="btn" id="getPathBtn" title="Extract the JSON path and copy it">Get Path</button>
@@ -1552,6 +1553,11 @@ self.onmessage = function (e) {
       b.title = valid ? 'Browse JSON with collapsible sections' : 'Fix the JSON to browse';
     });
   }
+  function jtUpdatePathRow() {
+    const row = document.getElementById('pathRow');
+    if (!row) return;
+    row.hidden = browseState.before.mode === 'browse' || browseState.after.mode === 'browse';
+  }
   function jtApplyMode(key) {
     const st = browseState[key];
     const browsing = st.mode === 'browse';
@@ -1564,6 +1570,7 @@ self.onmessage = function (e) {
       b.setAttribute('aria-pressed', String(on));
     });
     if (browsing) renderBrowse(key);
+    jtUpdatePathRow();
   }
   function setEditorMode(key, mode) {
     const st = browseState[key];

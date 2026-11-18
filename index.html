@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JSON Change Explainer</title>
+<title>JSON Kit</title>
 <meta name="description" content="Compare two JSON documents and get a human-readable explanation of every change. 100% local, no upload.">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1017">
@@ -523,7 +523,7 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
 <main class="container">
   <header class="app-header">
     <div class="brand">
-      <h1><span class="logo" aria-hidden="true">{⇄}</span>JSON Change Explainer</h1>
+      <h1><span class="logo" aria-hidden="true">{⇄}</span>JSON Kit</h1>
       <p>Compare two JSON documents and understand exactly what changed — locally in your browser.</p>
     </div>
     <div class="header-actions">
@@ -897,6 +897,7 @@ function alignArrays(beforeArr, afterArr, identityKey, strategy) {
   if (useIdentity) {
     const matchedBefore = new Set();
     const idToBefore = new Map();
+    const pendingA = [];
     for (let i = 0; i < b.length; i++) {
       const bv = b[i];
       if (isObject(bv) && hasOwn(bv, identityKey)) {
@@ -923,11 +924,15 @@ function alignArrays(beforeArr, afterArr, identityKey, strategy) {
         matchedBefore.add(found);
         ops.push({kind:'pair', bIdx:found, aIdx:j});
       } else {
-        ops.push({kind:'add', aIdx:j});
+        pendingA.push(j);
       }
     }
+    const pendingB = [];
     for (let i = 0; i < b.length; i++) {
-      if (!matchedBefore.has(i)) ops.push({kind:'remove', bIdx:i});
+      if (!matchedBefore.has(i)) pendingB.push(i);
+    }
+    if (pendingB.length || pendingA.length) {
+      ops.push.apply(ops, alignSubsetByLcs(b, a, pendingB, pendingA));
     }
     return {ops, useIdentity};
   }
@@ -942,18 +947,27 @@ function alignArrays(beforeArr, afterArr, identityKey, strategy) {
     return {ops, useIdentity};
   }
 
-  const n = b.length, m = a.length;
+  const allB = [], allA = [];
+  for (let i = 0; i < b.length; i++) allB.push(i);
+  for (let j = 0; j < a.length; j++) allA.push(j);
+  return {ops: alignSubsetByLcs(b, a, allB, allA), useIdentity};
+}
+
+function alignSubsetByLcs(b, a, bIdx, aIdx) {
+  const ops = [];
+  const n = bIdx.length, m = aIdx.length;
   if (n === 0 || m === 0 || n * m > 1000000) {
     const max = Math.max(n, m);
     for (let i = 0; i < max; i++) {
-      if (i < n && i < m) ops.push({kind:'pair', bIdx:i, aIdx:i});
-      else if (i < n) ops.push({kind:'remove', bIdx:i});
-      else ops.push({kind:'add', aIdx:i});
+      if (i < n && i < m) ops.push({kind:'pair', bIdx:bIdx[i], aIdx:aIdx[i]});
+      else if (i < n) ops.push({kind:'remove', bIdx:bIdx[i]});
+      else ops.push({kind:'add', aIdx:aIdx[i]});
     }
-    return {ops, useIdentity};
+    return ops;
   }
 
-  const sigB = b.map(stableSig), sigA = a.map(stableSig);
+  const sigB = bIdx.map(i => stableSig(b[i]));
+  const sigA = aIdx.map(j => stableSig(a[j]));
   const dp = [];
   for (let i = 0; i <= n; i++) dp.push(new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) {
@@ -964,9 +978,9 @@ function alignArrays(beforeArr, afterArr, identityKey, strategy) {
   const pendingB = [], pendingA = [];
   function flush() {
     const len = Math.min(pendingB.length, pendingA.length);
-    for (let k = 0; k < len; k++) ops.push({kind:'pair', bIdx:pendingB[k], aIdx:pendingA[k]});
-    for (let k = len; k < pendingB.length; k++) ops.push({kind:'remove', bIdx:pendingB[k]});
-    for (let k = len; k < pendingA.length; k++) ops.push({kind:'add', aIdx:pendingA[k]});
+    for (let k = 0; k < len; k++) ops.push({kind:'pair', bIdx:bIdx[pendingB[k]], aIdx:aIdx[pendingA[k]]});
+    for (let k = len; k < pendingB.length; k++) ops.push({kind:'remove', bIdx:bIdx[pendingB[k]]});
+    for (let k = len; k < pendingA.length; k++) ops.push({kind:'add', aIdx:aIdx[pendingA[k]]});
     pendingB.length = 0;
     pendingA.length = 0;
   }
@@ -974,7 +988,7 @@ function alignArrays(beforeArr, afterArr, identityKey, strategy) {
   while (i < n && j < m) {
     if (sigB[i] === sigA[j]) {
       flush();
-      ops.push({kind:'pair', bIdx:i, aIdx:j});
+      ops.push({kind:'pair', bIdx:bIdx[i], aIdx:aIdx[j]});
       i++; j++;
     } else if (dp[i+1][j] >= dp[i][j+1]) {
       pendingB.push(i++);
@@ -985,7 +999,7 @@ function alignArrays(beforeArr, afterArr, identityKey, strategy) {
   while (i < n) pendingB.push(i++);
   while (j < m) pendingA.push(j++);
   flush();
-  return {ops, useIdentity};
+  return ops;
 }
 
 function compareAll(before, after, opts) {

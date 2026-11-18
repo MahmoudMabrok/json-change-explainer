@@ -1,4 +1,4 @@
-# JSON Change Explainer
+# JSON Kit
 
 Compare two JSON documents and get a human-readable explanation of every change — plus search, filtering, a visual diff tree, and exports.
 
@@ -63,9 +63,9 @@ python3 -m http.server 8000
 
 | Strategy | Behavior |
 | --- | --- |
-| `Automatic` (default) | Uses identity matching when array items are objects containing the identity key; otherwise aligns items with a longest-common-subsequence pass over stable value signatures. Falls back to index alignment for very large arrays. |
+| `Automatic` (default) | Uses identity matching for items that are objects containing the identity key, then aligns the remaining items with a longest-common-subsequence pass over stable value signatures. Falls back to index alignment for very large arrays. |
 | `Index-based` | Pairs items by position; extra items are reported as added or removed. |
-| `Identity-based` | Pairs object items by the identity key (default `id`), even when their positions change. |
+| `Identity-based` | Pairs object items by the identity key (default `id`), even when their positions change; items without the key fall back to value-based alignment. |
 
 ### Ignored paths
 

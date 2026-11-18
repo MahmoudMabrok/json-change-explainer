@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Decisions that shaped JSON Change Explainer. Each record states the context, the decision, its consequences, and the alternatives that were rejected.
+Decisions that shaped JSON Kit. Each record states the context, the decision, its consequences, and the alternatives that were rejected.
 
 | ADR | Decision | Status |
 | --- | --- | --- |

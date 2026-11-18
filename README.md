@@ -19,6 +19,7 @@ Everything runs locally in your browser. There is no backend, no account, no upl
 ## Features
 
 - **Side-by-side editors** — paste JSON or upload `.json` files; format, compact, clear, or swap the two sides. Both editors get live syntax highlighting and a validity pill (✓ Valid / ✕ Invalid) as you type.
+- **Browse mode** — switch either editor between Edit and Browse to see that document as a collapsible tree. Every object and array gets a chevron anchor, Expand all / Collapse all reduce the document to an outline, and **Collapse around selection** keeps only the path to the selected node open while folding shallower siblings and deeper levels.
 - **Auto-fix** — per-editor “✦ Auto-fix” button repairs common JSON mistakes in place: smart/guillemet quotes (`“age”: 25`), single quotes, missing or trailing commas, unquoted keys/values, `//` and `/* */` comments, `NaN`/`Infinity`, control characters, and unclosed braces/brackets. A report lists what was changed, or confirms the input was already valid.
 - **Get Path** — place the cursor in either editor to extract the JSON path at that position and copy it.
 - **Structured diff** — reports `ADD`, `REMOVE`, `UPDATE`, and `TYPE_CHANGE` events with old and new values and types.

@@ -167,6 +167,80 @@ textarea.editor::-webkit-scrollbar-corner { background: transparent; }
 .tok-kw { color: var(--type); font-weight:600; }
 .tok-punct { color: var(--muted); }
 
+/* ---------- collapsible browse mode ---------- */
+.editor-head-right { display:flex; align-items:center; gap:8px; }
+.mode-switch {
+  display:inline-flex; gap:2px; padding:2px;
+  background: var(--editor-bg); border: 1px solid var(--border); border-radius: 8px;
+}
+.mode-btn {
+  border:0; background:transparent; color: var(--muted); font:inherit;
+  font-size: 11.5px; padding: 3px 9px; border-radius: 6px; cursor:pointer;
+}
+.mode-btn:hover { color: var(--text); }
+.mode-btn.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.mode-btn:disabled { opacity: .45; cursor: not-allowed; }
+.mode-btn:disabled:hover { color: var(--muted); }
+
+.browse-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; }
+.browse-bar[hidden] { display:none; }
+.browse-bar .btn { padding: 4px 9px; font-size: 12px; border-radius: 7px; }
+.browse-bar .sel-info {
+  color: var(--muted); font-size: 11.5px; margin-left: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+.browse-bar .sel-info code { color: var(--accent); font-size: 11px; }
+.sel-lvl {
+  color: var(--accent); background: var(--accent-soft); border-radius: 999px;
+  padding: 1px 7px; font-size: 10.5px; font-weight: 600;
+}
+
+.editor-tree {
+  display: none; height: 300px; overflow: auto; padding: 10px 12px;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
+  color: var(--text);
+}
+.editor-shell.browsing .editor-highlight,
+.editor-shell.browsing textarea.editor { display: none; }
+.editor-shell.browsing .editor-tree { display: block; }
+.editor-tree::-webkit-scrollbar { width:10px; height:10px; }
+.editor-tree::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+.editor-tree::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.jt-branch { position: relative; }
+.jt-row {
+  display:flex; align-items:flex-start; gap:4px; border-radius:5px;
+  padding:0 4px; white-space:pre-wrap; word-break:break-word;
+}
+.jt-row.clickable { cursor:pointer; }
+.jt-row.clickable:hover { background: var(--badge-bg); }
+.jt-row.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--ring); }
+.jt-chev {
+  flex:none; width:16px; height:18px; padding:0;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:3px; color: var(--muted);
+  cursor:pointer; user-select:none;
+  transition: transform .13s ease, color .13s, background .12s;
+}
+.jt-chev svg { display:block; }
+.jt-chev.open { transform: rotate(90deg); }
+.jt-chev:hover, .jt-chev:focus-visible {
+  color: var(--accent); background: var(--accent-soft); outline: none;
+}
+.jt-spacer { flex:none; width:16px; }
+.jt-children { margin-left:6px; padding-left:11px; border-left:1px solid var(--border-soft); }
+.jt-key { color: var(--accent); }
+.jt-idx { color: var(--muted); }
+.jt-punct { color: var(--muted); }
+.jt-val.str { color: var(--add); }
+.jt-val.num { color: var(--update); }
+.jt-val.kw { color: var(--type); font-weight: 600; }
+.jt-summary {
+  color: var(--muted); background: var(--badge-bg); border: 1px solid var(--border-soft);
+  border-radius: 999px; padding: 0 8px; font-size: 11.5px; white-space: nowrap;
+  align-self: center;
+}
+
 .editor-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .btn.autofix { border-color: var(--accent); color: var(--accent); }
 .btn.autofix:hover { background: var(--accent-soft); }
@@ -285,9 +359,19 @@ kbd {
 .spinner {
   width: 34px; height: 34px; border: 3px solid var(--border);
   border-top-color: var(--accent); border-radius: 50%;
-  animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+  animation: spin 1.8s linear infinite; margin: 0 auto 12px;
 }
 .progress-sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.progress-track {
+  width: 240px; height: 6px; margin: 14px auto 0;
+  background: var(--btn-hover-bg); border: 1px solid var(--border);
+  border-radius: 999px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; width: 0%;
+  background: var(--primary-grad);
+  transition: width 120ms linear;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- summary cards ---------- */
@@ -458,11 +542,24 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
       <div class="editor-block">
         <div class="editor-head">
           <div class="editor-label">Before JSON</div>
-          <span class="pill" id="beforePill" hidden></span>
+          <div class="editor-head-right">
+            <span class="pill" id="beforePill" hidden></span>
+            <div class="mode-switch" role="group" aria-label="Before JSON mode">
+              <button type="button" class="mode-btn active" data-editor="before" data-mode="edit" aria-pressed="true">Edit</button>
+              <button type="button" class="mode-btn" data-editor="before" data-mode="browse" aria-pressed="false">Browse</button>
+            </div>
+          </div>
         </div>
         <div class="editor-shell" id="beforeShell">
           <pre class="editor-highlight" id="beforeHighlight" aria-hidden="true"></pre>
           <textarea class="editor" id="beforeEditor" wrap="off" spellcheck="false" aria-label="Before JSON" placeholder="Paste original JSON here."></textarea>
+          <div class="editor-tree" id="beforeTree" aria-label="Before JSON collapsible tree"></div>
+        </div>
+        <div class="browse-bar" id="beforeBrowseBar" hidden>
+          <button type="button" class="btn" data-browse="expand" data-editor="before">Expand all</button>
+          <button type="button" class="btn" data-browse="collapse" data-editor="before">Collapse all</button>
+          <button type="button" class="btn" data-browse="around" data-editor="before" disabled>Collapse around selection</button>
+          <span class="sel-info" id="beforeSelInfo">Select a node to fold around it</span>
         </div>
         <div class="err" id="beforeErr" aria-live="polite"></div>
         <div class="editor-actions">
@@ -481,11 +578,24 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
       <div class="editor-block">
         <div class="editor-head">
           <div class="editor-label">After JSON</div>
-          <span class="pill" id="afterPill" hidden></span>
+          <div class="editor-head-right">
+            <span class="pill" id="afterPill" hidden></span>
+            <div class="mode-switch" role="group" aria-label="After JSON mode">
+              <button type="button" class="mode-btn active" data-editor="after" data-mode="edit" aria-pressed="true">Edit</button>
+              <button type="button" class="mode-btn" data-editor="after" data-mode="browse" aria-pressed="false">Browse</button>
+            </div>
+          </div>
         </div>
         <div class="editor-shell" id="afterShell">
           <pre class="editor-highlight" id="afterHighlight" aria-hidden="true"></pre>
           <textarea class="editor" id="afterEditor" wrap="off" spellcheck="false" aria-label="After JSON" placeholder="Paste updated JSON here."></textarea>
+          <div class="editor-tree" id="afterTree" aria-label="After JSON collapsible tree"></div>
+        </div>
+        <div class="browse-bar" id="afterBrowseBar" hidden>
+          <button type="button" class="btn" data-browse="expand" data-editor="after">Expand all</button>
+          <button type="button" class="btn" data-browse="collapse" data-editor="after">Collapse all</button>
+          <button type="button" class="btn" data-browse="around" data-editor="after" disabled>Collapse around selection</button>
+          <span class="sel-info" id="afterSelInfo">Select a node to fold around it</span>
         </div>
         <div class="err" id="afterErr" aria-live="polite"></div>
         <div class="editor-actions">
@@ -595,6 +705,8 @@ div.tree-removed { display:block; padding: 1px 6px; margin: 1px 0; }
       <div class="spinner"></div>
       <div>Comparing JSON documents…</div>
       <div class="progress-sub">Parsing and diffing everything locally</div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-sub" id="progressPct" aria-live="polite">0%</div>
     </div>
   </div>
 </main>
@@ -1187,6 +1299,322 @@ self.onmessage = function (e) {
   const shells = { before: document.getElementById('beforeShell'), after: document.getElementById('afterShell') };
   const highlights = { before: document.getElementById('beforeHighlight'), after: document.getElementById('afterHighlight') };
   const pills = { before: document.getElementById('beforePill'), after: document.getElementById('afterPill') };
+
+  // ---------- collapsible browse mode (input areas only) ----------
+  const browseState = {
+    before: { mode: 'edit', collapsed: new Set(), selected: null, depth: null, doc: null, index: [], text: '' },
+    after: { mode: 'edit', collapsed: new Set(), selected: null, depth: null, doc: null, index: [], text: '' }
+  };
+
+  function jtIsContainer(v) { return v !== null && typeof v === 'object'; }
+  function jtKeyLabel(k) {
+    return '<span class="jt-key">' + esc(JSON.stringify(k)) + '</span><span class="jt-punct">: </span>';
+  }
+  function jtIdxLabel(i) {
+    return '<span class="jt-idx">[' + i + ']</span><span class="jt-punct">: </span>';
+  }
+  function jtChildren(v) {
+    if (Array.isArray(v)) {
+      return v.map((item, i) => ({ v: item, label: jtIdxLabel(i), seg: '[' + i + ']' }));
+    }
+    if (jtIsContainer(v)) {
+      return Object.keys(v).map((k) => ({ v: v[k], label: jtKeyLabel(k), seg: '/' + k }));
+    }
+    return [];
+  }
+  function jtIndex(doc) {
+    const out = [];
+    (function walk(v, path, depth) {
+      if (!jtIsContainer(v)) return;
+      const kids = jtChildren(v);
+      if (!kids.length) return;
+      out.push({ path: path, depth: depth });
+      kids.forEach((k) => walk(k.v, path + k.seg, depth + 1));
+    })(doc, '', 0);
+    return out;
+  }
+  function jtFormat(v) {
+    if (v === null) return 'null';
+    if (typeof v === 'string') {
+      const s = JSON.stringify(v);
+      return s.length > 88 ? s.slice(0, 86) + '…"' : s;
+    }
+    return String(v);
+  }
+  function jtValueHTML(v) {
+    const t = v === null ? 'null' : typeof v;
+    const cls = t === 'string' ? 'str' : t === 'number' ? 'num' : (t === 'boolean' || t === 'null') ? 'kw' : 'plain';
+    return '<span class="jt-val ' + cls + '">' + esc(jtFormat(v)) + '</span>';
+  }
+  function jtSpacer() {
+    const s = document.createElement('span');
+    s.className = 'jt-spacer';
+    return s;
+  }
+  function jtChevron(key, path, open) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'jt-chev' + (open ? ' open' : '');
+    b.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true">' +
+      '<path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+      'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    b.setAttribute('aria-expanded', String(open));
+    b.setAttribute('aria-label', (open ? 'Collapse ' : 'Expand ') + (path || 'root'));
+    b.title = (open ? 'Collapse' : 'Expand') + ' (Alt-click: whole subtree)';
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.altKey) jtToggleSubtree(key, path);
+      else jtSetCollapsed(key, path, !browseState[key].collapsed.has(path));
+    });
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' && !browseState[key].collapsed.has(path)) {
+        e.preventDefault();
+        jtSetCollapsed(key, path, true);
+      } else if (e.key === 'ArrowRight' && browseState[key].collapsed.has(path)) {
+        e.preventDefault();
+        jtSetCollapsed(key, path, false);
+      }
+    });
+    return b;
+  }
+  function jtSelect(key, row, path, depth) {
+    const st = browseState[key];
+    const mount = document.getElementById(key + 'Tree');
+    if (mount) mount.querySelectorAll('.jt-row.selected').forEach((el) => el.classList.remove('selected'));
+    row.classList.add('selected');
+    st.selected = path;
+    st.depth = depth;
+    jtUpdateBar(key);
+  }
+  function jtAttachRow(row, key, path, depth) {
+    row.classList.add('clickable');
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      if (e.target.closest('.jt-val')) return;
+      const sel = window.getSelection();
+      if (sel && String(sel).length) return;
+      jtSelect(key, row, path, depth);
+    });
+  }
+  function jtBuild(key, v, label, path, depth) {
+    const st = browseState[key];
+    const isSel = st.selected === path;
+
+    if (!jtIsContainer(v)) {
+      const row = document.createElement('div');
+      row.className = 'jt-row' + (isSel ? ' selected' : '');
+      row.dataset.path = path;
+      row.appendChild(jtSpacer());
+      if (label) row.insertAdjacentHTML('beforeend', label);
+      row.insertAdjacentHTML('beforeend', jtValueHTML(v));
+      jtAttachRow(row, key, path, depth);
+      return row;
+    }
+
+    const kids = jtChildren(v);
+    const isArr = Array.isArray(v);
+
+    if (!kids.length) {
+      const row = document.createElement('div');
+      row.className = 'jt-row' + (isSel ? ' selected' : '');
+      row.dataset.path = path;
+      row.appendChild(jtSpacer());
+      if (label) row.insertAdjacentHTML('beforeend', label);
+      row.insertAdjacentHTML('beforeend', '<span class="jt-punct">' + (isArr ? '[]' : '{}') + '</span>');
+      jtAttachRow(row, key, path, depth);
+      return row;
+    }
+
+    const collapsed = st.collapsed.has(path);
+    const branch = document.createElement('div');
+    branch.className = 'jt-branch';
+
+    const row = document.createElement('div');
+    row.className = 'jt-row' + (isSel ? ' selected' : '');
+    row.dataset.path = path;
+    row.appendChild(jtChevron(key, path, !collapsed));
+    if (label) row.insertAdjacentHTML('beforeend', label);
+
+    if (collapsed) {
+      const n = isArr ? v.length : Object.keys(v).length;
+      const noun = isArr ? (n === 1 ? 'item' : 'items') : (n === 1 ? 'key' : 'keys');
+      row.insertAdjacentHTML('beforeend',
+        '<span class="jt-summary">' + (isArr ? '[…]' : '{…}') + ' ' + n + ' ' + noun + '</span>');
+      jtAttachRow(row, key, path, depth);
+      branch.appendChild(row);
+      return branch;
+    }
+
+    row.insertAdjacentHTML('beforeend', '<span class="jt-punct">' + (isArr ? '[' : '{') + '</span>');
+    jtAttachRow(row, key, path, depth);
+    branch.appendChild(row);
+
+    const inner = document.createElement('div');
+    inner.className = 'jt-children';
+    kids.forEach((k) => inner.appendChild(jtBuild(key, k.v, k.label, path + k.seg, depth + 1)));
+    branch.appendChild(inner);
+
+    const close = document.createElement('div');
+    close.className = 'jt-row';
+    close.appendChild(jtSpacer());
+    close.insertAdjacentHTML('beforeend', '<span class="jt-punct">' + (isArr ? ']' : '}') + '</span>');
+    branch.appendChild(close);
+
+    return branch;
+  }
+
+  function renderBrowse(key) {
+    const st = browseState[key];
+    const mount = document.getElementById(key + 'Tree');
+    if (!mount) return;
+    mount.innerHTML = '';
+    mount.appendChild(jtBuild(key, st.doc, null, '', 0));
+    jtUpdateBar(key);
+  }
+
+  function jtUpdateBar(key) {
+    const st = browseState[key];
+    const info = document.getElementById(key + 'SelInfo');
+    const btn = document.querySelector('.browse-bar [data-browse="around"][data-editor="' + key + '"]');
+    if (!info || !btn) return;
+    btn.disabled = st.selected === null;
+    if (st.selected === null) {
+      info.textContent = 'Select a node to fold around it';
+      btn.title = 'Select a node first';
+    } else {
+      info.innerHTML = 'Selected <code>' + esc(st.selected || 'root') + '</code> ' +
+        '<span class="sel-lvl">level ' + st.depth + '</span>';
+      btn.title = 'Keep only the path to this node open';
+    }
+  }
+
+  function jtSetCollapsed(key, path, value) {
+    const st = browseState[key];
+    if (value) st.collapsed.add(path); else st.collapsed.delete(path);
+    renderBrowse(key);
+  }
+  function jtToggleSubtree(key, path) {
+    const st = browseState[key];
+    const target = !st.collapsed.has(path);
+    st.index.forEach((c) => {
+      const inside = c.path === path || (path === ''
+        ? true
+        : c.path.startsWith(path + '/') || c.path.startsWith(path + '['));
+      if (!inside) return;
+      if (target) st.collapsed.add(c.path); else st.collapsed.delete(c.path);
+    });
+    renderBrowse(key);
+  }
+  function jtExpandAll(key) {
+    browseState[key].collapsed.clear();
+    renderBrowse(key);
+  }
+  function jtCollapseAll(key) {
+    const st = browseState[key];
+    st.collapsed.clear();
+    st.index.forEach((c) => { if (c.depth > 0) st.collapsed.add(c.path); });
+    renderBrowse(key);
+  }
+  function jtCollapseAround(key) {
+    const st = browseState[key];
+    if (st.selected === null) return;
+    const sel = st.selected;
+    st.collapsed.clear();
+    st.index.forEach((c) => {
+      if (c.depth === 0) return;
+      if (c.path === sel) return;
+      if (sel.startsWith(c.path + '/') || sel.startsWith(c.path + '[')) return;
+      st.collapsed.add(c.path);
+    });
+    renderBrowse(key);
+    const mount = document.getElementById(key + 'Tree');
+    if (mount) {
+      const row = Array.prototype.find.call(
+        mount.querySelectorAll('.jt-row'),
+        (r) => r.dataset.path === sel
+      );
+      if (row) row.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function jtParse(key) {
+    const text = editors[key].value;
+    if (!text.trim()) return { ok: false };
+    try { return { ok: true, value: JSON.parse(text) }; }
+    catch (e) { return { ok: false }; }
+  }
+  function jtSyncBrowseButton(key) {
+    const parsed = jtParse(key);
+    const text = editors[key].value;
+    const valid = parsed.ok && !!text.trim();
+    document.querySelectorAll('.mode-btn[data-editor="' + key + '"][data-mode="browse"]').forEach((b) => {
+      b.disabled = !valid;
+      b.title = valid ? 'Browse JSON with collapsible sections' : 'Fix the JSON to browse';
+    });
+  }
+  function jtApplyMode(key) {
+    const st = browseState[key];
+    const browsing = st.mode === 'browse';
+    shells[key].classList.toggle('browsing', browsing);
+    const bar = document.getElementById(key + 'BrowseBar');
+    if (bar) bar.hidden = !browsing;
+    document.querySelectorAll('.mode-btn[data-editor="' + key + '"]').forEach((b) => {
+      const on = b.dataset.mode === st.mode;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    if (browsing) renderBrowse(key);
+  }
+  function setEditorMode(key, mode) {
+    const st = browseState[key];
+    if (mode === 'browse') {
+      const parsed = jtParse(key);
+      if (!parsed.ok) { jtSyncBrowseButton(key); return; }
+      const text = editors[key].value;
+      if (st.text !== text) { st.text = text; st.selected = null; st.depth = null; }
+      st.doc = parsed.value;
+      st.index = jtIndex(parsed.value);
+      st.mode = 'browse';
+    } else {
+      st.mode = 'edit';
+    }
+    jtApplyMode(key);
+  }
+  function refreshBrowse(key) {
+    const st = browseState[key];
+    if (st.mode !== 'browse') return;
+    const parsed = jtParse(key);
+    if (!parsed.ok) {
+      st.mode = 'edit';
+      st.selected = null;
+      st.depth = null;
+      jtApplyMode(key);
+      return;
+    }
+    const text = editors[key].value;
+    if (st.text !== text) { st.text = text; st.selected = null; st.depth = null; }
+    st.doc = parsed.value;
+    st.index = jtIndex(parsed.value);
+    renderBrowse(key);
+  }
+
+  document.querySelectorAll('.mode-switch').forEach((sw) => {
+    sw.addEventListener('click', (e) => {
+      const btn = e.target.closest('.mode-btn');
+      if (!btn || btn.disabled) return;
+      setEditorMode(btn.dataset.editor, btn.dataset.mode);
+    });
+  });
+  document.querySelectorAll('.browse-bar').forEach((bar) => {
+    bar.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-browse]');
+      if (!btn) return;
+      const key = btn.dataset.editor;
+      if (btn.dataset.browse === 'expand') jtExpandAll(key);
+      else if (btn.dataset.browse === 'collapse') jtCollapseAll(key);
+      else if (btn.dataset.browse === 'around') jtCollapseAround(key);
+    });
+  });
   const HIGHLIGHT_LIMIT = 150000;
 
   // --- JSON auto-fix (scanner-aware; string contents untouched except quote fixes) ---
@@ -1378,6 +1806,7 @@ self.onmessage = function (e) {
   function updatePill(key) {
     const ta = editors[key], pill = pills[key];
     if (!ta || !pill) return;
+    jtSyncBrowseButton(key);
     const v = ta.value;
     if (!v.trim()) { pill.hidden = true; pill.removeAttribute('title'); return; }
     try {
@@ -1405,6 +1834,7 @@ self.onmessage = function (e) {
     editors[key].value = text;
     paintEditor(key);
     updatePill(key);
+    refreshBrowse(key);
   }
 
   function bindFile(inputId, editorKey) {
@@ -1499,7 +1929,32 @@ self.onmessage = function (e) {
     const br = parseEditor(beforeEditor.value, beforeErr);
     const ar = parseEditor(afterEditor.value, afterErr);
     if (!br.ok || !ar.ok) return;
+    const progressFill = document.getElementById('progressFill');
+    const progressPct = document.getElementById('progressPct');
+    const setProgress = (pct) => {
+      const c = Math.max(0, Math.min(100, Math.round(pct)));
+      if (progressFill) progressFill.style.width = c + '%';
+      if (progressPct) progressPct.textContent = c + '%';
+    };
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const MIN_DELAY = reduceMotion ? 0 : 2800;
+    const startedAt = Date.now();
+    let rafId = null;
     progressOverlay.hidden = false;
+    setProgress(0);
+    if (MIN_DELAY > 0) {
+      const tick = () => {
+        const elapsed = Date.now() - startedAt;
+        const t = Math.min(1, elapsed / MIN_DELAY);
+        // ease-out so it feels slow at start and settles
+        const eased = 1 - Math.pow(1 - t, 1.6);
+        setProgress(eased * 95);
+        if (elapsed < MIN_DELAY) rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    } else {
+      setProgress(95);
+    }
     const arrayStrategy = document.getElementById('arrayStrategy').value;
     const identityKey = document.getElementById('identityKey').value.trim() || 'id';
     const ignoredPaths = document.getElementById('ignoredPaths').value.split('\n').map(s => s.trim()).filter(Boolean);
@@ -1508,11 +1963,18 @@ self.onmessage = function (e) {
         const ev = compareAll(br.value, ar.value, {arrayStrategy, identityKey, ignoredPaths});
         events = ev || [];
         visibleCount = VISIBLE_STEP;
-        progressOverlay.hidden = true;
-        renderResults();
-        const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        resultsSection.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        const finish = () => {
+          if (rafId) cancelAnimationFrame(rafId);
+          setProgress(100);
+          progressOverlay.hidden = true;
+          renderResults();
+          resultsSection.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        };
+        const remaining = MIN_DELAY - (Date.now() - startedAt);
+        if (remaining > 0) setTimeout(finish, remaining);
+        else finish();
       } catch (err) {
+        if (rafId) cancelAnimationFrame(rafId);
         progressOverlay.hidden = true;
         beforeErr.textContent = (err && err.message) ? err.message : String(err);
       }

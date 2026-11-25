@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JSON Kit</title>
 <meta name="description" content="Compare two JSON documents and get a human-readable explanation of every change. 100% local, no upload.">
+<link rel="canonical" href="https://mo3ta.top/json-kit/">
+<meta property="og:title" content="JSON Kit">
+<meta property="og:description" content="Compare two JSON documents and get a human-readable explanation of every change. 100% local, no upload.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mo3ta.top/json-kit/">
+<meta property="og:image" content="https://mo3ta.top/json-kit/docs/screenshots/results-light.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="JSON Kit">
+<meta name="twitter:description" content="Compare two JSON documents and get a human-readable explanation of every change. 100% local, no upload.">
+<meta name="twitter:image" content="https://mo3ta.top/json-kit/docs/screenshots/results-light.png">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1017">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6fb">
@@ -1148,7 +1158,7 @@ self.onmessage = function (e) {
   let groupBy = 'path';
   let visibleCount = 3;
   const VISIBLE_STEP = 3;
-  let currentExport = {filename: 'json-change-export.txt', type: 'text/plain'};
+  let currentExport = {filename: 'json-kit-export.txt', type: 'text/plain'};
   let currentFormat = 'descriptions';
 
   // helpers
@@ -2115,7 +2125,7 @@ self.onmessage = function (e) {
     }
     renderChangeList();
     currentFormat = 'descriptions';
-    currentExport = {filename: 'json-change-descriptions.txt', type: 'text/plain'};
+    currentExport = {filename: 'json-kit-descriptions.txt', type: 'text/plain'};
     updateExportPreview();
   }
 
@@ -2336,7 +2346,7 @@ self.onmessage = function (e) {
     return out;
   }
   function buildMarkdown(list) {
-    let md = '# JSON Change Report\n\nTotal changes: ' + list.length + '\n\n';
+    let md = '# JSON Kit Report\n\nTotal changes: ' + list.length + '\n\n';
     const labels = {ADD: 'Added', REMOVE: 'Removed', UPDATE: 'Updated', TYPE_CHANGE: 'Type Changes'};
     ['ADD','REMOVE','UPDATE','TYPE_CHANGE'].forEach(op => {
       const items = list.filter(e => e.operation === op);
@@ -2385,27 +2395,27 @@ self.onmessage = function (e) {
   });
   document.getElementById('copyAllDesc').addEventListener('click', () => {
     currentFormat = 'descriptions';
-    currentExport = {filename: 'json-change-descriptions.txt', type: 'text/plain'};
+    currentExport = {filename: 'json-kit-descriptions.txt', type: 'text/plain'};
     updateExportPreview();
   });
   document.getElementById('copyCompact').addEventListener('click', () => {
     currentFormat = 'compact';
-    currentExport = {filename: 'json-change-compact.txt', type: 'text/plain'};
+    currentExport = {filename: 'json-kit-compact.txt', type: 'text/plain'};
     updateExportPreview();
   });
   document.getElementById('downloadMd').addEventListener('click', () => {
     currentFormat = 'markdown';
-    currentExport = {filename: 'json-change-report.md', type: 'text/markdown'};
+    currentExport = {filename: 'json-kit-report.md', type: 'text/markdown'};
     updateExportPreview();
   });
   document.getElementById('downloadCsv').addEventListener('click', () => {
     currentFormat = 'csv';
-    currentExport = {filename: 'json-change-report.csv', type: 'text/csv'};
+    currentExport = {filename: 'json-kit-report.csv', type: 'text/csv'};
     updateExportPreview();
   });
   document.getElementById('downloadJson').addEventListener('click', () => {
     currentFormat = 'json';
-    currentExport = {filename: 'json-changes.json', type: 'application/json'};
+    currentExport = {filename: 'json-kit-changes.json', type: 'application/json'};
     updateExportPreview();
   });
 

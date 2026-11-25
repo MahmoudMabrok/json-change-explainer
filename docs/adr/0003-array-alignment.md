@@ -15,7 +15,7 @@ Expose three strategies and default to automatic:
 - **Identity-based** — pair object items by a configurable key (default `id`). Correct for collections whose items can move.
 - **Automatic** — use identity matching when either array contains an object with the identity key; otherwise compute a longest-common-subsequence alignment over stable, key-sorted value signatures. If the dynamic-programming table would exceed 1,000,000 cells, fall back to index alignment.
 
-If every element in both arrays is a primitive, automatic mode always uses index alignment.
+Automatic mode on primitive arrays uses the same value-signature alignment as other non-identity arrays (and falls back to index alignment when the dynamic-programming table would exceed 1,000,000 cells). That avoids reporting a cascade of false updates when an item is inserted.
 
 ## Consequences
 

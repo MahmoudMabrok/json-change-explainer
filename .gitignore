@@ -3,5 +3,9 @@ vendor/
 .commandcode/
 _hf-scaffold/
 
+# MCP server dependencies and the core copy created by npm prepack
+node_modules/
+mcp/src/json-kit-core.cjs
+
 # OS cruft
 .DS_Store

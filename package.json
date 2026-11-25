@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "JSON Kit static site. The root package stays CommonJS so core/json-kit.js can be required by the MCP server and loaded as a classic browser script. Run tests with npm test.",
+  "scripts": {
+    "test": "npm test --prefix mcp"
+  }
+}

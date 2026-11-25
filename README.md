@@ -2,7 +2,7 @@
 
 Compare two JSON documents and get a human-readable explanation of every change — plus search, filtering, a visual diff tree, and exports.
 
-**Live demo: [mahmoudmabrok.github.io/json-change-explainer](https://mahmoudmabrok.github.io/json-change-explainer/)**
+**Live demo: [mo3ta.top/json-kit](https://mo3ta.top/json-kit/)**
 
 Everything runs locally in your browser. There is no backend, no account, no upload, and no telemetry. The app is a single static `index.html` with zero dependencies and no build step.
 
@@ -38,8 +38,8 @@ Everything runs locally in your browser. There is no backend, no account, no upl
 ## Quick start
 
 ```bash
-git clone https://github.com/MahmoudMabrok/json-change-explainer.git
-cd json-change-explainer
+git clone https://github.com/MahmoudMabrok/json-kit.git
+cd json-kit
 open index.html
 ```
 
@@ -110,12 +110,16 @@ Key implementation choices are documented as ADRs:
 
 ## Deployment
 
-GitHub Pages serves the repository root directly — no Actions workflow or build artifact is required:
+GitHub Pages serves this repository from the `main` branch root. There is no Actions workflow and no build. The user site [`MahmoudMabrok/mahmoudmabrok.github.io`](https://github.com/MahmoudMabrok/mahmoudmabrok.github.io) has a CNAME of `mo3ta.top`, so this project site is published at:
+
+**https://mo3ta.top/json-kit/**
+
+The app is one self-contained `index.html`. Styles and scripts are inline, and the icon is a data URI, so nothing is loaded from a root-relative URL such as `/assets/...`. The page therefore works at `/json-kit/`, from a local server at `/`, and when opened directly via `file://`. Do not add a `CNAME` file in this repo — the custom domain belongs to the user site. There is no client-side router, so refreshing `/json-kit/` does not need a `404.html` fallback.
 
 1. Push to `main`.
-2. In **Settings → Pages**, set the source to the branch root.
-3. The site is published at `https://<user>.github.io/<repo>/`.
+2. In **Settings → Pages**, keep the source as **Deploy from a branch** → `main` → `/ (root)`.
+3. The site is published at `https://mo3ta.top/json-kit/`.
 
 ## Contributing
 
-Issues and pull requests are welcome at [MahmoudMabrok/json-change-explainer](https://github.com/MahmoudMabrok/json-change-explainer). Since the app is a single file, test changes by opening `index.html` and comparing a few JSON pairs in both themes; there is no test runner or package manager.
+Issues and pull requests are welcome at [MahmoudMabrok/json-kit](https://github.com/MahmoudMabrok/json-kit). Since the app is a single file, test changes by opening `index.html` and comparing a few JSON pairs in both themes; there is no test runner or package manager.

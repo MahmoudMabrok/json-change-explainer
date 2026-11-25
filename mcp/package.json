@@ -1,0 +1,38 @@
+{
+  "name": "json-kit-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for JSON Kit: compare, explain, format, validate, fix, and export JSON locally.",
+  "type": "module",
+  "bin": {
+    "json-kit-mcp": "./src/cli.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node --test test/*.test.js",
+    "vendor-core": "node scripts/vendor-core.js",
+    "prepack": "node scripts/vendor-core.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MahmoudMabrok/json-kit.git",
+    "directory": "mcp"
+  },
+  "keywords": [
+    "mcp",
+    "json",
+    "diff",
+    "json-kit",
+    "model-context-protocol"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  }
+}

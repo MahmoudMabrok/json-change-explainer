@@ -4,7 +4,7 @@ Compare two JSON documents and get a human-readable explanation of every change 
 
 **Live demo: [mo3ta.top/json-kit](https://mo3ta.top/json-kit/)**
 
-Everything runs locally in your browser. There is no backend, no account, no upload, and no telemetry. The app is a single static `index.html` with zero dependencies and no build step.
+Everything runs locally in your browser. There is no backend, no account, no upload, and no telemetry. The page is static: `index.html` plus `core/json-kit.js`, with zero runtime dependencies and no build step.
 
 ## Screenshots
 
@@ -83,14 +83,16 @@ Paths are matched on the parsed path segments, so array positions do not need to
 
 ![Architecture diagram](docs/adr/architecture.svg)
 
-The app is deliberately a single file. It has three cooperating layers:
+The interface stays in one file. The pure logic is a second file both the page and the MCP server load, with no build:
 
-- **Diff engine** — pure functions (`typeOf`, `parsePathString`, `alignArrays`, `compareAll`) that know nothing about the DOM. The engine is authored inside a `<script type="text/plain">` block and evaluated on the main thread so the page still works from `file://`, where blob-based Web Workers are unreliable.
+- **Core** (`core/json-kit.js`) — pure functions (`compareAll`, `fixJson`, `parseJson`, path lookup, export builders, visual tree). No DOM. The page loads it with `<script src="core/json-kit.js"></script>`, a classic script so the relative URL resolves under `/json-kit/` on GitHub Pages and the file still opens via `file://`. Comparison runs on the main thread.
 - **Event model** — the only contract between engine and UI: `{ operation, path, property, index, oldValue, newValue, oldType, newType, description, ... }`.
-- **Presentation** — editors, summary, filtering/grouping, visual tree, and export builders, all derived from the event list.
+- **Presentation** (`index.html`) — editors, summary, filtering/grouping, visual tree, and export buttons, all derived from the event list.
 
 ```text
-index.html                 # app: styles, UI, diff engine, exports
+index.html                 # app: styles and UI
+core/json-kit.js           # shared pure logic (page + MCP server)
+mcp/                       # MCP server (stdio) and its tests
 docs/screenshots/          # images used in this README
 docs/adr/                  # architecture decision records
 ```
@@ -114,12 +116,25 @@ GitHub Pages serves this repository from the `main` branch root. There is no Act
 
 **https://mo3ta.top/json-kit/**
 
-The app is one self-contained `index.html`. Styles and scripts are inline, and the icon is a data URI, so nothing is loaded from a root-relative URL such as `/assets/...`. The page therefore works at `/json-kit/`, from a local server at `/`, and when opened directly via `file://`. Do not add a `CNAME` file in this repo — the custom domain belongs to the user site. There is no client-side router, so refreshing `/json-kit/` does not need a `404.html` fallback.
+Styles and the icon are inline (the icon is a data URI). The only extra request is the relative script `core/json-kit.js` — no leading slash, no `<base>` tag — so it resolves to `/json-kit/core/json-kit.js` on GitHub Pages, to `/core/json-kit.js` on a local server, and beside `index.html` when opened via `file://`. Do not add a `CNAME` file in this repo — the custom domain belongs to the user site. There is no client-side router, so refreshing `/json-kit/` does not need a `404.html` fallback.
 
 1. Push to `main`.
 2. In **Settings → Pages**, keep the source as **Deploy from a branch** → `main` → `/ (root)`.
 3. The site is published at `https://mo3ta.top/json-kit/`.
 
+## MCP server
+
+JSON Kit's comparison, explanations, formatting, validation, auto-fix, path lookup, browse outline, exports, and visual diff are also tools for MCP clients (Claude Desktop, Cursor, Claude Code). The server is `mcp/`, package name `json-kit-mcp`. It speaks stdio and calls `core/json-kit.js` — the same file the page loads. It is not published to npm from this repo; see [mcp/README.md](mcp/README.md) for tool list, local run, and copy-paste client config.
+
+```bash
+cd mcp
+npm install
+npm test
+node src/cli.js
+```
+
+A later remote transport (Streamable HTTP, for example on Cloudflare Workers at a subdomain of mo3ta.top) could wrap these same tool handlers. That is not built here.
+
 ## Contributing
 
-Issues and pull requests are welcome at [MahmoudMabrok/json-kit](https://github.com/MahmoudMabrok/json-kit). Since the app is a single file, test changes by opening `index.html` and comparing a few JSON pairs in both themes; there is no test runner or package manager.
+Issues and pull requests are welcome at [MahmoudMabrok/json-kit](https://github.com/MahmoudMabrok/json-kit). Open `index.html` and compare a few JSON pairs in both themes after a UI change. `npm test` (from the repo root, after `npm install` inside `mcp/`) runs the core and MCP tests.

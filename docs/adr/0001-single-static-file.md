@@ -9,14 +9,14 @@ The tool is a small, self-contained utility: paste JSON, diff it, read the repor
 
 ## Decision
 
-Keep the entire application — styles, UI, diff engine, and exporters — in a single `index.html` with no runtime or build-time dependencies.
+Keep the user interface — styles, editors, and rendering — in a single `index.html` with no runtime framework and no build step. The pure diff, path, auto-fix, and export functions live in `core/json-kit.js`, which the page loads with a relative classic `<script src>` (not an ES module) so `file://`, a local server, and GitHub Pages at `/json-kit/` all keep working. The same file is what the MCP server requires.
 
 ## Consequences
 
 - Opening the file directly (`file://`) works, including offline.
 - Deployment is a file copy; GitHub Pages can serve the repository root as-is.
-- Reviewing a change means reading one file rather than tracing a module graph.
-- The file is large (~1,500 lines) and the UI, engine, and styles share one namespace. This is acceptable at the current size but is the main pressure to split if the app grows.
+- Reviewing a UI change still means reading `index.html`. Reviewing a diff or export change means reading `core/json-kit.js`, which has no DOM.
+- The page file is still large, and the UI is hand-rendered. The engine is no longer in that file: `core/json-kit.js` is the shared pure module, which is what made an MCP server possible without a second implementation.
 - No framework or bundler means DOM rendering is manual and there is no component model.
 
 ## Alternatives considered

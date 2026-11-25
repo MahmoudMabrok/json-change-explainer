@@ -1,0 +1,27 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+      - name: Install and test the MCP server
+        working-directory: mcp
+        run: |
+          npm ci
+          npm test
+      - name: Page still loads the shared core with a relative URL
+        run: |
+          grep -q 'src="core/json-kit.js"' index.html
+          grep -q 'https://mo3ta.top/json-kit/' index.html
+          ! grep -q '<base' index.html
+          node --input-type=commonjs -e "const k=require('./core/json-kit.js'); if (typeof k.compareAll !== 'function') process.exit(1)"
